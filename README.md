@@ -37,10 +37,14 @@ calendar.
 
 ### Two views
 
-- **List** — everything, grouped into Overdue / Today / Coming up /
-  Anytime / Done. Plain to-dos live in **Anytime**. Any task can have
-  subtasks (tap the **+** on a row, nests to any depth); a parent shows a
-  `done/total` progress chip once it has children.
+- **List** — everything, grouped into **Overdue / Today / This week /
+  This month / Beyond this month / Done**. A task with no reminder ages
+  forward through those same windows from the day you wrote it down, so
+  it drifts down the list instead of being stranded in a bucket nobody
+  reads. Filter chips mirror the sections one-for-one, and each section
+  shows its latest 7 with a *Show more*. Any task can have subtasks (tap
+  the **+** on a row, nests to any depth); a parent shows a `done/total`
+  progress chip once it has children.
 - **Calendar** — a month grid of *only* the tasks carrying a reminder
   (tap ‹ › or **Today** to navigate); each day shows a dot per reminder.
   Tapping a day lists that day's reminders and lets you add one for that
@@ -56,10 +60,10 @@ directly via `file://` will skip offline caching. Serve the folder with
 anything static, e.g.:
 
 ```bash
-python -m http.server 8822 --directory buddy-reminder
+python -m http.server 8833
 ```
 
-Then open `http://localhost:8822`. To actually test offline behavior:
+Then open `http://localhost:8833`. To actually test offline behavior:
 open it once (so the service worker installs), then turn on airplane mode
 or kill your network and reload — the app shell and your data should both
 still work.

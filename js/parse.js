@@ -4,6 +4,27 @@
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
+// Voice input arrives as a full sentence ("set a reminder to car wash on
+// Monday"), not a bare title — strip the command phrase so it doesn't leak
+// into the task name. Loops (capped) so a doubled-up phrase like "please
+// remind me to set a reminder for..." still reduces to just the task.
+const OPENERS =
+  /^(?:please\s+)?(?:remind me (?:to|about)|set (?:a |an )?reminder(?:s)? (?:to|for)|add (?:a |an )?(?:reminder|task) (?:to|for)|create (?:a |an )?(?:reminder|task) (?:to|for)|don'?t forget to|do not forget to|i need to|i(?:'ve| have) got to|i gotta|gotta|make sure (?:to|i))\s+/i;
+
+function stripVoiceOpener(text) {
+  let strippedAny = false;
+  for (let i = 0; i < 3; i++) {
+    const next = text.replace(OPENERS, "");
+    if (next === text) break;
+    text = next;
+    strippedAny = true;
+  }
+  // "remind me about THE car wash" — only touch a leading article once an
+  // opener actually matched, so plain typed titles are never altered.
+  if (strippedAny) text = text.replace(/^(?:the|a|an)\s+/i, "");
+  return text;
+}
+
 function addDays(date, n) {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
@@ -17,7 +38,7 @@ function startOfDay(d) {
 }
 
 export function parseInput(raw, today = new Date()) {
-  let text = raw.trim();
+  let text = stripVoiceOpener(raw.trim());
   let intervalDays = null;
   let dueAt = null;
   const base = startOfDay(today);

@@ -6,6 +6,22 @@
 <title>Buddy Reminder</title>
 <meta name="description" content="A calm companion for getting things done — offline-first tasks and reminders that notice what you've forgotten.">
 <meta name="theme-color" content="#0f0e0d">
+<script>
+  // Apply any saved theme before the stylesheet paints, so there's no flash
+  // of the default theme first. Kept in sync with js/theme.js by hand —
+  // this can't just import it, a module script runs too late for this.
+  (function () {
+    try {
+      var c = localStorage.getItem("buddy-color-theme");
+      if (c === "ocean" || c === "blossom") document.documentElement.dataset.colorTheme = c;
+      var m = localStorage.getItem("buddy-mode");
+      if (m === "light" || m === "dark") document.documentElement.dataset.theme = m;
+      var scales = { small: "0.9", medium: "1", large: "1.15" };
+      var f = localStorage.getItem("buddy-font-scale");
+      if (scales[f]) document.documentElement.style.setProperty("--font-scale", scales[f]);
+    } catch (e) {}
+  })();
+</script>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,25 +37,31 @@
 
 <div class="app">
 
-  <header class="topbar">
-    <div class="buddy" id="buddy"></div>
-    <div class="topbar-text">
+  <!-- Today tab only: promoted Buddy (ring + mood face), greeting, one-line status -->
+  <header class="hero" id="todayHero">
+    <div class="hero-buddy-wrap">
+      <svg class="ring" viewBox="0 0 88 88" aria-hidden="true">
+        <circle cx="44" cy="44" r="41" class="ring-track" />
+        <circle cx="44" cy="44" r="41" class="ring-progress" id="ringProgress" />
+      </svg>
+      <div class="buddy" id="buddy"><span class="buddy-mouth" id="buddyMouth"></span></div>
+    </div>
+    <div class="hero-text">
+      <p class="eyebrow" id="dateLine">&nbsp;</p>
       <h1 id="greetingText">&nbsp;</h1>
-      <p class="topbar-status" id="statusLine">&nbsp;</p>
-      <p class="eyebrow" id="dateLine" hidden></p>
+      <p class="hero-status" id="statusLine">&nbsp;</p>
     </div>
     <button type="button" class="bell" id="notifyEnable" aria-label="Turn on reminder notifications" title="Turn on notifications">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3a4.2 4.2 0 0 0-4.2 4.2c0 3.6-1.3 4.9-1.3 4.9h11S14.2 10.8 14.2 7.2A4.2 4.2 0 0 0 10 3zM8.5 14.6a1.7 1.7 0 0 0 3 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span class="bell-dot" id="notifyPrompt"></span>
     </button>
-    <div class="view-switch" role="group" aria-label="View">
-      <button type="button" id="viewList" aria-pressed="true" aria-label="List view" title="List">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 5h9M7 10h9M7 15h9M3.6 5h.01M3.6 10h.01M3.6 15h.01" stroke-linecap="round"/></svg>
-      </button>
-      <button type="button" id="viewCalendar" aria-pressed="false" aria-label="Calendar view" title="Calendar">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4.5" width="14" height="12" rx="2.4"/><path d="M3 8.5h14M7 2.6v3M13 2.6v3" stroke-linecap="round"/></svg>
-      </button>
-    </div>
+    <button type="button" class="bell" id="settingsGearBtn" aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7">
+        <path d="M3 5h8M15 5h2" stroke-linecap="round"/><circle cx="13" cy="5" r="1.6"/>
+        <path d="M3 10h2M9 10h8" stroke-linecap="round"/><circle cx="7" cy="10" r="1.6"/>
+        <path d="M3 15h8M15 15h2" stroke-linecap="round"/><circle cx="13" cy="15" r="1.6"/>
+      </svg>
+    </button>
   </header>
 
   <div class="strip strip-offline" id="offlineBanner">
@@ -47,51 +69,248 @@
   </div>
 
   <main class="content" id="content">
-    <aside class="nudges" id="insightBody"></aside>
-    <div class="filter-bar" id="filterBar" role="group" aria-label="Filter tasks"></div>
-    <div class="lists" id="lists"></div>
-    <div class="calendar-wrap" id="calendarWrap" hidden></div>
+
+    <!-- ---------------- Today ---------------- -->
+    <section class="tab-panel" id="panelToday">
+      <p class="buddy-line" id="buddyLine" hidden></p>
+      <div class="filter-bar" id="filterBar" role="group" aria-label="Filter tasks"></div>
+      <div class="lists" id="lists"></div>
+    </section>
+
+    <!-- ------------- Calendar (bridged, unrestyled this stage) ------------- -->
+    <section class="tab-panel" id="panelCalendar" hidden>
+      <div class="calendar-wrap" id="calendarWrap"></div>
+    </section>
+
+    <!-- ------------- Buddy (bridged, unrestyled this stage) ------------- -->
+    <section class="tab-panel" id="panelBuddy" hidden>
+      <p class="eyebrow">Buddy's take</p>
+      <h2 class="panel-title">What I've noticed</h2>
+      <p class="panel-sub">Worked out on your phone from your own repeat intervals. Nothing leaves the device.</p>
+      <div class="stats-row" id="statsRow"></div>
+      <aside class="nudges" id="insightBody"></aside>
+    </section>
+
+    <!-- ------------- Settings (bridged, unrestyled this stage) ------------- -->
+    <section class="tab-panel settings-panel" id="panelSettings" hidden>
+      <p class="eyebrow">Settings</p>
+      <h2 class="panel-title">Make it yours</h2>
+
+      <div class="settings-section">
+        <p class="settings-label">Theme</p>
+        <div class="theme-grid" id="themeGrid" role="group" aria-label="Theme">
+          <button type="button" class="theme-swatch" data-color-theme="buddy" aria-pressed="false">
+            <span class="swatch-preview swatch-buddy" aria-hidden="true"></span>
+            <span>Buddy</span>
+          </button>
+          <button type="button" class="theme-swatch" data-color-theme="ocean" aria-pressed="false">
+            <span class="swatch-preview swatch-ocean" aria-hidden="true"></span>
+            <span>Ocean</span>
+          </button>
+          <button type="button" class="theme-swatch" data-color-theme="blossom" aria-pressed="false">
+            <span class="swatch-preview swatch-blossom" aria-hidden="true"></span>
+            <span>Blossom</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <p class="settings-label">Appearance</p>
+        <div class="mode-switch" id="modeSwitch" role="group" aria-label="Appearance">
+          <button type="button" data-mode="system" aria-pressed="false">System</button>
+          <button type="button" data-mode="light" aria-pressed="false">Light</button>
+          <button type="button" data-mode="dark" aria-pressed="false">Dark</button>
+        </div>
+        <p class="settings-hint">System follows your phone or browser's own light/dark setting.</p>
+      </div>
+
+      <div class="settings-section">
+        <p class="settings-label">Text size</p>
+        <div class="mode-switch" id="fontSizeSwitch" role="group" aria-label="Text size">
+          <button type="button" data-font-scale="small" aria-pressed="false">Small</button>
+          <button type="button" data-font-scale="medium" aria-pressed="false">Medium</button>
+          <button type="button" data-font-scale="large" aria-pressed="false">Large</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <p class="settings-label">Voice capture</p>
+        <div class="mode-switch" id="voiceAutoSwitch" role="group" aria-label="Voice capture behavior">
+          <button type="button" data-voice-auto="true" aria-pressed="false">Auto-create</button>
+          <button type="button" data-voice-auto="false" aria-pressed="false">Review first</button>
+        </div>
+        <p class="settings-hint" id="voiceAutoHint"></p>
+      </div>
+
+      <div class="settings-section">
+        <div class="toggle-card">
+          <button type="button" class="toggle-row" id="notifToggleRow">
+            <span class="toggle-text">
+              <span class="toggle-label">Reminder notifications</span>
+              <span class="toggle-hint" id="notifToggleHint"></span>
+            </span>
+            <span class="toggle-switch" id="notifToggleSwitch"><span class="toggle-knob"></span></span>
+          </button>
+          <button type="button" class="toggle-row" id="syncToggleRow">
+            <span class="toggle-text">
+              <span class="toggle-label">Sync across devices</span>
+              <span class="toggle-hint" id="syncToggleHint">Off until you add your own Firebase config.</span>
+            </span>
+            <span class="toggle-switch" id="syncToggleSwitch"><span class="toggle-knob"></span></span>
+          </button>
+          <button type="button" class="toggle-row" id="automationToggleRow">
+            <span class="toggle-text">
+              <span class="toggle-label">Automation payload</span>
+              <span class="toggle-hint" id="automationToggleHint"></span>
+            </span>
+            <span class="toggle-switch" id="automationToggleSwitch"><span class="toggle-knob"></span></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <p class="settings-label">WhatsApp country code</p>
+        <div class="cc-row">
+          <span class="cc-plus">+</span>
+          <input type="tel" class="cc-input" id="countryCodeInput" placeholder="92" inputmode="numeric" autocomplete="off" />
+        </div>
+        <p class="settings-hint">Turns a number saved as 0300 1234567 into the full international one WhatsApp needs.</p>
+      </div>
+
+      <div class="settings-section">
+        <p class="settings-label">Notification preview</p>
+        <div class="lock-preview">
+          <p class="lock-preview-date" id="lockPreviewDate">&nbsp;</p>
+          <p class="lock-preview-time" id="lockPreviewTime">&nbsp;</p>
+          <div class="lock-card" id="lockCard" hidden>
+            <div class="lock-card-head">
+              <span class="lock-card-buddy" aria-hidden="true"><span></span><span></span></span>
+              <span class="lock-card-tag">Buddy</span>
+              <span class="lock-card-now">now</span>
+            </div>
+            <p class="lock-card-title" id="lockCardTitle"></p>
+            <p class="lock-card-sub" id="lockCardSub"></p>
+          </div>
+          <p class="lock-preview-empty" id="lockPreviewEmpty" hidden>Nothing due — Buddy stays quiet.</p>
+        </div>
+      </div>
+
+      <p class="settings-hint">Buddy Reminder · on-device only. Sync stays off until you add a Firebase config; voice needs a connection because the browser transcribes off-device.</p>
+    </section>
+
   </main>
 
-  <div class="composer">
-    <p class="voice-status" id="voiceStatus" hidden></p>
+  <!-- Pinned above the tab bar: open the composer sheet, or talk to it -->
+  <div class="quickbar">
+    <button type="button" class="add-pill" id="addTaskPill">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 4.5v11M4.5 10h11" stroke-linecap="round"/></svg>
+      <span>Add a task…</span>
+    </button>
+    <button type="button" class="mic-fab" id="micBtn" aria-label="Add by voice" title="Add by voice">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="6" height="10" rx="3"/><path d="M4 9.5a6 6 0 0 0 12 0M10 15.5v2.3M7 17.8h6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
 
-    <div class="when-picker" id="whenPicker" hidden>
-      <p class="when-editing" id="whenEditing" hidden></p>
-      <div class="when-quick">
-        <button type="button" data-quick="today">Today</button>
-        <button type="button" data-quick="tomorrow">Tomorrow</button>
-        <button type="button" data-quick="nextweek">Next week</button>
-      </div>
-      <div class="when-fields">
-        <label class="when-field"><span>Date</span><input type="date" id="whenDate" /></label>
-        <label class="when-field"><span>Time</span><input type="time" id="whenTime" /></label>
-        <label class="when-field"><span>Repeat</span>
-          <select id="whenRepeat">
-            <option value="">Never</option>
-            <option value="1">Every day</option>
-            <option value="7">Every week</option>
-            <option value="14">Every 2 weeks</option>
-            <option value="30">Every month</option>
-          </select>
-        </label>
-        <button type="button" id="whenClear">Clear</button>
-      </div>
+  <nav class="tab-bar" id="tabBar" role="tablist" aria-label="Sections">
+    <button type="button" class="tab-btn" id="tabToday" data-tab="today" aria-pressed="true">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 5h9M7 10h9M7 15h9M3.6 5h.01M3.6 10h.01M3.6 15h.01" stroke-linecap="round"/></svg>
+      Today
+    </button>
+    <button type="button" class="tab-btn" id="tabCalendar" data-tab="calendar" aria-pressed="false">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="14" height="12" rx="2.4"/><path d="M3 8.5h14M7 2.6v3M13 2.6v3" stroke-linecap="round"/></svg>
+      Calendar
+    </button>
+    <button type="button" class="tab-btn" id="tabBuddy" data-tab="buddy" aria-pressed="false">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2.2l1.5 4.3 4.3 1.5-4.3 1.5L10 13.8 8.5 9.5 4.2 8l4.3-1.5z"/></svg>
+      Buddy
+    </button>
+    <button type="button" class="tab-btn" id="tabSettings" data-tab="settings" aria-pressed="false">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h8M15 5h2" stroke-linecap="round"/><circle cx="13" cy="5" r="1.6"/><path d="M3 10h2M9 10h8" stroke-linecap="round"/><circle cx="7" cy="10" r="1.6"/><path d="M3 15h8M15 15h2" stroke-linecap="round"/><circle cx="13" cy="15" r="1.6"/></svg>
+      Settings
+    </button>
+  </nav>
+
+</div>
+
+<!-- New-task composer: a bottom sheet, replacing the old inline composer -->
+<div class="modal-overlay" id="composerOverlay" hidden>
+  <div class="modal sheet" id="composerSheet" role="dialog" aria-modal="true" aria-label="New task">
+    <div class="sheet-handle"></div>
+    <div class="modal-head">
+      <h3 class="sheet-title">New task</h3>
+      <button type="button" class="modal-close" id="composerClose" aria-label="Close">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/></svg>
+      </button>
     </div>
-
-    <div class="when-row" id="whenRow"></div>
 
     <form id="captureForm">
       <input id="captureInput" type="text" placeholder="Try “call Mom tomorrow at 8pm”…" autocomplete="off" />
-      <button type="button" class="mic-btn" id="micBtn" aria-label="Add by voice" title="Add by voice">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="6" height="10" rx="3"/><path d="M4 9.5a6 6 0 0 0 12 0M10 15.5v2.3M7 17.8h6" stroke-linecap="round"/></svg>
-      </button>
-      <button type="submit" class="add-btn" aria-label="Add task" title="Add task">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M10 4.2v11.6M4.2 10h11.6" stroke-linecap="round"/></svg>
-      </button>
     </form>
-  </div>
+    <p class="parse-readout"><span>Buddy heard:</span><span class="parse-chip" id="parseChip">No reminder — just a to-do</span></p>
 
+    <div class="quick-when">
+      <p class="settings-label">When</p>
+      <div class="quick-row" id="quickDay">
+        <button type="button" data-day="today">Today</button>
+        <button type="button" data-day="tomorrow">Tomorrow</button>
+        <button type="button" data-day="nextweek">Next week</button>
+        <button type="button" data-day="none">No date</button>
+      </div>
+      <div class="quick-row" id="quickTime">
+        <button type="button" data-time="9:00">9:00 AM</button>
+        <button type="button" data-time="13:00">1:00 PM</button>
+        <button type="button" data-time="18:00">6:00 PM</button>
+        <button type="button" data-time="20:00">8:00 PM</button>
+      </div>
+      <div class="quick-row" id="quickRepeat">
+        <button type="button" data-repeat="1">Every day</button>
+        <button type="button" data-repeat="7">Every week</button>
+        <button type="button" data-repeat="14">Every 2 weeks</button>
+        <button type="button" data-repeat="">Never</button>
+      </div>
+    </div>
+
+    <button type="button" class="save-task-btn" id="saveDraftBtn">Save task</button>
+  </div>
+</div>
+
+<!-- Who to message, and what to say. Saved on the task; sent only when tapped. -->
+<div class="modal-overlay" id="waOverlay" hidden>
+  <div class="modal sheet" id="waSheet" role="dialog" aria-modal="true" aria-label="WhatsApp message">
+    <div class="sheet-handle"></div>
+    <div class="modal-head">
+      <h3 class="sheet-title">WhatsApp message</h3>
+      <button type="button" class="modal-close" id="waClose" aria-label="Close">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <button type="button" class="wa-pick-btn" id="waPickBtn" hidden>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="7" r="3.2"/><path d="M4 16.4c.6-2.8 3-4.4 6-4.4s5.4 1.6 6 4.4" stroke-linecap="round"/></svg>
+      <span>Choose from contacts</span>
+    </button>
+
+    <div class="wa-field">
+      <label for="waName">Who</label>
+      <input type="text" id="waName" placeholder="Name (optional)" autocomplete="off" />
+    </div>
+
+    <div class="wa-field">
+      <label for="waPhone">Number</label>
+      <input type="tel" id="waPhone" placeholder="e.g. 0300 1234567" autocomplete="off" inputmode="tel" />
+      <p class="wa-resolved" id="waResolved"></p>
+    </div>
+
+    <div class="wa-field">
+      <label for="waText">Message</label>
+      <textarea id="waText" rows="3" placeholder="What should Buddy have ready to send?"></textarea>
+    </div>
+
+    <div class="wa-sheet-actions">
+      <button type="button" class="wa-remove-btn" id="waRemove">Remove</button>
+      <button type="button" class="save-task-btn" id="waSave">Save</button>
+    </div>
+  </div>
 </div>
 
 <div class="voice-overlay" id="voiceOverlay" hidden>
@@ -107,6 +326,111 @@
 
 <div class="modal-overlay" id="dayModalOverlay" hidden>
   <div class="modal" id="dayModal" role="dialog" aria-modal="true"></div>
+</div>
+
+<!-- Full-screen task detail: tap a task's disclosure chevron in the list. -->
+<div class="detail-screen" id="detailScreen" hidden>
+  <div class="detail-head">
+    <button type="button" class="detail-icon-btn" id="detailBack" aria-label="Back">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <span class="detail-head-spacer"></span>
+    <button type="button" class="detail-icon-btn detail-icon-danger" id="detailDelete" aria-label="Delete task">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h12M8 6V4.6c0-.6.5-1.1 1.1-1.1h1.8c.6 0 1.1.5 1.1 1.1V6M6 6l.6 9.4c0 .6.5 1.1 1.1 1.1h4.6c.6 0 1-.5 1.1-1.1L14 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <div class="detail-body">
+    <div class="detail-title-row">
+      <button type="button" class="check detail-check" id="detailCheck" aria-label="Mark done">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M4 10.5l3.5 3.5L16 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <h2 class="detail-title" id="detailTitle" contenteditable="true" spellcheck="false"></h2>
+    </div>
+
+    <div class="detail-card">
+      <button type="button" class="detail-field" id="detailReminderRow">
+        <span class="detail-field-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3a4 4 0 0 0-4 4c0 3.5-1.2 4.7-1.2 4.7h10.4S14 10.5 14 7a4 4 0 0 0-4-4zM8.6 14.4a1.6 1.6 0 0 0 2.8 0" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="detail-field-label">Reminder</span>
+        <span class="detail-field-value" id="detailReminderValue">None</span>
+      </button>
+      <button type="button" class="detail-field" id="detailWhatsappRow">
+        <span class="detail-field-icon detail-field-icon-wa"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 9.6c0 3.2-3.1 5.8-7 5.8-.8 0-1.6-.1-2.3-.3L3.6 16.4l1.1-2.9C3.6 12.5 3 11.1 3 9.6 3 6.4 6.1 3.8 10 3.8s7 2.6 7 5.8z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="detail-field-label">WhatsApp</span>
+        <span class="detail-field-value" id="detailWhatsappValue">None</span>
+      </button>
+    </div>
+
+    <button type="button" class="wa-send-btn" id="detailWhatsappSend" hidden>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 9.6c0 3.2-3.1 5.8-7 5.8-.8 0-1.6-.1-2.3-.3L3.6 16.4l1.1-2.9C3.6 12.5 3 11.1 3 9.6 3 6.4 6.1 3.8 10 3.8s7 2.6 7 5.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Send on WhatsApp</span>
+    </button>
+
+    <div class="detail-steps-section">
+      <div class="detail-steps-head">
+        <p class="settings-label">Steps</p>
+        <p class="detail-steps-count" id="detailStepsLabel"></p>
+      </div>
+      <div class="detail-card detail-steps-card">
+        <div class="detail-steps-list" id="detailStepsList"></div>
+        <div class="detail-step-add">
+          <span class="detail-step-add-dot"></span>
+          <input type="text" id="detailStepInput" placeholder="Add a step…" autocomplete="off" />
+          <button type="button" id="detailStepAddBtn" aria-label="Add step">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 4.5v11M4.5 10h11" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <p class="detail-footnote" id="detailFootnote"></p>
+  </div>
+</div>
+
+<!-- Reminder editor for an EXISTING task (tap a task's pill) — unrelated to the
+     composer sheet above; kept as the precise native-input popover it already was. -->
+<div class="when-picker" id="whenPicker" hidden>
+  <p class="when-editing" id="whenEditing" hidden></p>
+  <div class="when-quick">
+    <button type="button" data-quick="today">Today</button>
+    <button type="button" data-quick="tomorrow">Tomorrow</button>
+    <button type="button" data-quick="nextweek">Next week</button>
+  </div>
+  <div class="when-fields">
+    <label class="when-field"><span>Date</span><input type="date" id="whenDate" /></label>
+    <label class="when-field"><span>Time</span><input type="time" id="whenTime" /></label>
+    <label class="when-field"><span>Repeat</span>
+      <select id="whenRepeat">
+        <option value="">Never</option>
+        <option value="1">Every day</option>
+        <option value="7">Every week</option>
+        <option value="14">Every 2 weeks</option>
+        <option value="30">Every month</option>
+      </select>
+    </label>
+    <button type="button" id="whenClear">Clear</button>
+  </div>
+</div>
+
+<p class="voice-status" id="voiceStatus" hidden></p>
+
+<div class="toast" id="toast" hidden></div>
+
+<!-- First run only: two short steps, then never shown again. -->
+<div class="onboard-screen" id="onboardScreen" hidden>
+  <div class="onboard-body">
+    <div class="onboard-buddy" aria-hidden="true">
+      <span></span><span></span><span class="onboard-mouth"></span>
+    </div>
+    <div class="onboard-copy">
+      <h2 id="onboardTitle"></h2>
+      <p id="onboardBody"></p>
+    </div>
+    <input type="text" class="onboard-name" id="onboardName" placeholder="Your name" autocomplete="off" hidden />
+  </div>
+  <div class="onboard-actions">
+    <button type="button" class="onboard-primary" id="onboardPrimary"></button>
+    <button type="button" class="onboard-skip" id="onboardSkip"></button>
+  </div>
 </div>
 
 <script type="module" src="js/app.js"></script>

@@ -2,9 +2,24 @@ import { db } from "./db.js";
 import { computeFlags, messageFor } from "./insights.js";
 import { voiceSupported, createVoiceInput } from "./voice.js";
 import { parseInput } from "./parse.js";
-import { notificationsSupported, requestPermission, pollDueReminders, scheduleTrigger } from "./notify.js";
+import { notificationsSupported, requestPermission, pollDueReminders, scheduleTrigger, AUTOMATION_TAG } from "./notify.js";
 import { initSync, pushItem, pushDelete } from "./sync.js";
 import { WEEKDAY_LABELS, dateKey, monthMatrix, itemsByDay, isToday } from "./calendar.js";
+import { initTheme, getColorTheme, getMode, setColorTheme, setMode, getFontScale, setFontScale } from "./theme.js";
+import {
+  getVoiceAutoCreate,
+  setVoiceAutoCreate,
+  getOwnerName,
+  setOwnerName,
+  isOnboarded,
+  setOnboarded,
+  getCountryCode,
+  setCountryCode,
+  getAutomationPayload,
+  setAutomationPayload,
+} from "./prefs.js";
+import { isSyncEnabled } from "./sync.js";
+import { contactPickerSupported, pickContact, normalizePhone, prettyPhone, waLink } from "./whatsapp.js";
 
 const OWNER_NAME = "Ahmad";
 const DAY_MS = 86400000;
@@ -24,15 +39,18 @@ function addDays(d, n) {
 }
 
 // ---------------- elements ----------------
-const contentEl = document.getElementById("content");
 const listsEl = document.getElementById("lists");
 const calendarWrap = document.getElementById("calendarWrap");
 const filterBar = document.getElementById("filterBar");
+const todayHero = document.getElementById("todayHero");
 const greetingEl = document.getElementById("greetingText");
 const dateLineEl = document.getElementById("dateLine");
 const statusLine = document.getElementById("statusLine");
 const buddyEl = document.getElementById("buddy");
+const buddyLineEl = document.getElementById("buddyLine");
+const ringProgress = document.getElementById("ringProgress");
 const insightBody = document.getElementById("insightBody");
+const statsRow = document.getElementById("statsRow");
 const form = document.getElementById("captureForm");
 const input = document.getElementById("captureInput");
 const micBtn = document.getElementById("micBtn");
@@ -40,11 +58,9 @@ const voiceStatus = document.getElementById("voiceStatus");
 const offlineBanner = document.getElementById("offlineBanner");
 const notifyPrompt = document.getElementById("notifyPrompt");
 const notifyEnable = document.getElementById("notifyEnable");
-const viewListBtn = document.getElementById("viewList");
-const viewCalendarBtn = document.getElementById("viewCalendar");
+const settingsGearBtn = document.getElementById("settingsGearBtn");
 const dayModalOverlay = document.getElementById("dayModalOverlay");
 const dayModal = document.getElementById("dayModal");
-const whenRow = document.getElementById("whenRow");
 const whenPicker = document.getElementById("whenPicker");
 const whenDate = document.getElementById("whenDate");
 const whenTime = document.getElementById("whenTime");
@@ -53,18 +69,101 @@ const whenEditing = document.getElementById("whenEditing");
 const voiceOverlay = document.getElementById("voiceOverlay");
 const voiceTranscript = document.getElementById("voiceTranscript");
 const voiceStop = document.getElementById("voiceStop");
+const themeGrid = document.getElementById("themeGrid");
+const modeSwitch = document.getElementById("modeSwitch");
+const fontSizeSwitch = document.getElementById("fontSizeSwitch");
+const voiceAutoSwitch = document.getElementById("voiceAutoSwitch");
+const voiceAutoHint = document.getElementById("voiceAutoHint");
+
+// tab shell
+const panelToday = document.getElementById("panelToday");
+const panelCalendar = document.getElementById("panelCalendar");
+const panelBuddy = document.getElementById("panelBuddy");
+const panelSettings = document.getElementById("panelSettings");
+const tabToday = document.getElementById("tabToday");
+const tabCalendar = document.getElementById("tabCalendar");
+const tabBuddy = document.getElementById("tabBuddy");
+const tabSettings = document.getElementById("tabSettings");
+
+// composer sheet
+const addTaskPill = document.getElementById("addTaskPill");
+const composerOverlay = document.getElementById("composerOverlay");
+const composerClose = document.getElementById("composerClose");
+const parseChip = document.getElementById("parseChip");
+const quickDay = document.getElementById("quickDay");
+const quickTime = document.getElementById("quickTime");
+const quickRepeat = document.getElementById("quickRepeat");
+const saveDraftBtn = document.getElementById("saveDraftBtn");
+
+// task detail screen
+const detailScreen = document.getElementById("detailScreen");
+const detailBack = document.getElementById("detailBack");
+const detailDelete = document.getElementById("detailDelete");
+const detailCheck = document.getElementById("detailCheck");
+const detailTitle = document.getElementById("detailTitle");
+const detailReminderRow = document.getElementById("detailReminderRow");
+const detailReminderValue = document.getElementById("detailReminderValue");
+const detailStepsLabel = document.getElementById("detailStepsLabel");
+const detailStepsList = document.getElementById("detailStepsList");
+const detailStepInput = document.getElementById("detailStepInput");
+const detailStepAddBtn = document.getElementById("detailStepAddBtn");
+const detailFootnote = document.getElementById("detailFootnote");
+const detailWhatsappRow = document.getElementById("detailWhatsappRow");
+const detailWhatsappValue = document.getElementById("detailWhatsappValue");
+const detailWhatsappSend = document.getElementById("detailWhatsappSend");
+
+// whatsapp editor sheet
+const waOverlay = document.getElementById("waOverlay");
+const waClose = document.getElementById("waClose");
+const waPickBtn = document.getElementById("waPickBtn");
+const waName = document.getElementById("waName");
+const waPhone = document.getElementById("waPhone");
+const waResolved = document.getElementById("waResolved");
+const waText = document.getElementById("waText");
+const waRemove = document.getElementById("waRemove");
+const waSave = document.getElementById("waSave");
+const countryCodeInput = document.getElementById("countryCodeInput");
+
+// settings: notifications/sync toggles + notification preview
+const notifToggleRow = document.getElementById("notifToggleRow");
+const notifToggleSwitch = document.getElementById("notifToggleSwitch");
+const notifToggleHint = document.getElementById("notifToggleHint");
+const syncToggleRow = document.getElementById("syncToggleRow");
+const syncToggleSwitch = document.getElementById("syncToggleSwitch");
+const automationToggleRow = document.getElementById("automationToggleRow");
+const automationToggleSwitch = document.getElementById("automationToggleSwitch");
+const automationToggleHint = document.getElementById("automationToggleHint");
+const lockPreviewDate = document.getElementById("lockPreviewDate");
+const lockPreviewTime = document.getElementById("lockPreviewTime");
+const lockCard = document.getElementById("lockCard");
+const lockCardTitle = document.getElementById("lockCardTitle");
+const lockCardSub = document.getElementById("lockCardSub");
+const lockPreviewEmpty = document.getElementById("lockPreviewEmpty");
+
+// toast
+const toast = document.getElementById("toast");
+
+// onboarding
+const onboardScreen = document.getElementById("onboardScreen");
+const onboardTitle = document.getElementById("onboardTitle");
+const onboardBody = document.getElementById("onboardBody");
+const onboardName = document.getElementById("onboardName");
+const onboardPrimary = document.getElementById("onboardPrimary");
+const onboardSkip = document.getElementById("onboardSkip");
 
 let allItems = [];
-let view = "list";
+let tab = "today";
 let calendarMonth = startOfDay(new Date());
 calendarMonth.setDate(1);
 let openAddFor = null;
 let justAddedId = null;
-let activeFilter = "all";
+let activeFilter = "today"; // open on what's due today, not the whole list
 let expandedSections = new Set();
 let editingItemId = null; // task whose reminder the picker is currently editing
 let selectedDate = null;
 let dayCreateOpen = false;
+let detailItemId = null; // task shown full-screen, or null
+let waEditingId = null; // task whose WhatsApp message the sheet is editing
 
 let pendingWhen = { dueAt: null, hasTime: false, intervalDays: null };
 let whenTouched = false;
@@ -78,8 +177,25 @@ const iconPlus =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 4.5v11M4.5 10h11" stroke-linecap="round"/></svg>';
 const iconBell =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3a4 4 0 0 0-4 4c0 3.5-1.2 4.7-1.2 4.7h10.4S14 10.5 14 7a4 4 0 0 0-4-4zM8.6 14.4a1.6 1.6 0 0 0 2.8 0" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const iconSpark =
-  '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2.2l1.5 4.3 4.3 1.5-4.3 1.5L10 13.8 8.5 9.5 4.2 8l4.3-1.5z"/></svg>';
+const iconChat =
+  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 9.6c0 3.2-3.1 5.8-7 5.8-.8 0-1.6-.1-2.3-.3L3.6 16.4l1.1-2.9C3.6 12.5 3 11.1 3 9.6 3 6.4 6.1 3.8 10 3.8s7 2.6 7 5.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const iconChevron =
+  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 4l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+// ---------------- toast ----------------
+let toastTimer = null;
+function showToast(msg) {
+  toast.innerHTML = "";
+  const inner = document.createElement("div");
+  inner.className = "toast-inner";
+  inner.textContent = msg;
+  toast.appendChild(inner); // a fresh element each time, so the animation always restarts
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 2400);
+}
 
 // ---------------- when helpers ----------------
 function repeatLabel(intervalDays) {
@@ -115,48 +231,10 @@ function describeWhen(when) {
   return bits.join(" · ");
 }
 
-function whenIsSet(when) {
-  return !!(when.dueAt || when.intervalDays);
-}
-
-// ---------------- capture: reminder chip + picker ----------------
-function renderWhenRow() {
-  whenRow.innerHTML = "";
-  if (!whenIsSet(pendingWhen)) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "when-add";
-    btn.innerHTML = iconBell + "<span>Remind me</span>";
-    btn.addEventListener("click", () => toggleWhenPicker());
-    whenRow.appendChild(btn);
-    return;
-  }
-
-  const chip = document.createElement("span");
-  chip.className = "when-chip";
-  chip.innerHTML = iconBell + '<button type="button" class="when-chip-label"></button>';
-  chip.querySelector(".when-chip-label").textContent = describeWhen(pendingWhen);
-  chip.querySelector(".when-chip-label").addEventListener("click", () => toggleWhenPicker());
-
-  const clear = document.createElement("button");
-  clear.type = "button";
-  clear.className = "when-chip-clear";
-  clear.setAttribute("aria-label", "Remove reminder");
-  clear.innerHTML =
-    '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9" stroke-linecap="round"/></svg>';
-  clear.addEventListener("click", () => {
-    pendingWhen = { dueAt: null, hasTime: false, intervalDays: null };
-    whenTouched = true;
-    toggleWhenPicker(false);
-    renderWhenRow();
-  });
-  chip.appendChild(clear);
-  whenRow.appendChild(chip);
-}
-
-// No argument toggles; pass true/false to force it.
-// The picker edits one of two things: the draft reminder for the task being
-// typed, or the reminder on an existing task. `editingItemId` says which.
+// ---------------- reminder editor (existing tasks only) ----------------
+// `#whenPicker` now only edits the reminder on an existing task — the
+// composer sheet has its own quick-pick chips instead. `editingItemId` is
+// always set while it's open.
 function readWhen() {
   if (!editingItemId) return pendingWhen;
   const it = allItems.find((i) => i.id === editingItemId);
@@ -169,14 +247,7 @@ function readWhen() {
 }
 
 function writeWhen(next) {
-  if (!editingItemId) {
-    pendingWhen = next;
-    whenTouched = true; // manual control; stop auto-filling from typed text
-    renderWhenRow();
-    syncPicker();
-    positionPicker(); // the chip it's anchored to just changed width
-    return;
-  }
+  if (!editingItemId) return; // the composer sheet writes pendingWhen directly
   saveUpdate(editingItemId, {
     dueAt: next.dueAt,
     hasTime: !!next.hasTime,
@@ -196,36 +267,22 @@ function openReminderEditor(item, event) {
   editingItemId = item.id;
   whenEditing.textContent = `Reminder for “${item.title}”`;
   whenEditing.hidden = false;
-  whenRow.hidden = true;
   whenPicker.hidden = false;
   whenPicker.classList.add("floating");
   syncPicker();
   positionPicker();
 }
 
-// Whatever opened the picker: a task's reminder pill, or the chip in the
-// composer. Re-resolved each time because both get re-rendered underneath us.
-function anchorEl() {
-  if (editingItemId) return document.querySelector(`.pill-edit[data-pill-for="${editingItemId}"]`);
-  return whenRow.firstElementChild;
-}
-
-// The picker floats next to whatever opened it. It deliberately does NOT sit
-// in the composer's flow — doing that grew the composer and squeezed the list
-// off screen, which read as the page going dark.
+// Pinned to a fixed, scroll-independent spot near the top of the screen —
+// the row it's editing lives inside the scrolling list, so anchoring to it
+// would desync the instant the user scrolls.
 function positionPicker() {
   if (whenPicker.hidden) return;
-  const anchor = anchorEl();
-  if (!anchor) return;
-
-  const r = anchor.getBoundingClientRect();
   const width = Math.min(340, window.innerWidth - 24);
   whenPicker.style.width = width + "px";
-  whenPicker.style.left = Math.min(Math.max(12, r.left), window.innerWidth - width - 12) + "px";
-
-  const h = whenPicker.offsetHeight || 160;
-  const below = r.bottom + 8;
-  whenPicker.style.top = (below + h > window.innerHeight - 12 ? Math.max(12, r.top - h - 8) : below) + "px";
+  whenPicker.style.left = "50%";
+  whenPicker.style.transform = "translateX(-50%)";
+  whenPicker.style.top = "12px";
 }
 
 window.addEventListener("resize", positionPicker);
@@ -235,38 +292,24 @@ function toggleWhenPicker(open) {
   whenPicker.hidden = !next;
 
   if (!next) {
-    // leaving edit mode hands the picker back to the compose draft
     editingItemId = null;
     whenEditing.hidden = true;
-    whenRow.hidden = false;
     whenPicker.classList.remove("floating");
     whenPicker.style.cssText = "";
-    renderWhenRow();
     return;
   }
 
   whenPicker.classList.add("floating");
-
-  // Opening it is intent to set a reminder, so start from now rather than
-  // from empty fields the user has to fill in from scratch.
-  if (!editingItemId && !whenIsSet(pendingWhen)) {
-    const now = new Date();
-    now.setSeconds(0, 0);
-    writeWhen({ dueAt: now.toISOString(), hasTime: true, intervalDays: null });
-    return;
-  }
   syncPicker();
   positionPicker();
 }
 
 // Click anywhere outside to dismiss. Nothing is discarded — every field
-// writes straight into pendingWhen, so there's no unsaved state to lose.
+// writes straight to the task being edited, so there's no unsaved state to lose.
 document.addEventListener("click", (e) => {
   if (whenPicker.hidden) return;
-  // Opening the picker re-renders the chip row, which detaches the very
-  // element that was clicked — that's our own doing, not a click outside.
   if (!e.target.isConnected) return;
-  if (e.target.closest("#whenPicker") || e.target.closest("#whenRow")) return;
+  if (e.target.closest("#whenPicker")) return;
   // a native date/time popup is open on top of us — leave it alone
   if (document.activeElement === whenDate || document.activeElement === whenTime) return;
   toggleWhenPicker(false);
@@ -336,19 +379,71 @@ document.getElementById("whenClear").addEventListener("click", () => {
 });
 
 function resetPendingWhen() {
-  editingItemId = null;
   pendingWhen = { dueAt: null, hasTime: false, intervalDays: null };
   whenTouched = false;
-  toggleWhenPicker(false);
 }
 
-// ---------------- greeting ----------------
+// ---------------- greeting & buddy hero ----------------
+const RING_CIRC = 2 * Math.PI * 41; // matches the ring's r=41 in index.html
+
 function renderGreeting() {
-  const h = new Date().getHours();
+  const today = new Date();
+  const h = today.getHours();
   const part = h < 12 ? "Morning" : h < 18 ? "Afternoon" : "Evening";
-  greetingEl.textContent = `${part}, ${OWNER_NAME}`;
-  dateLineEl.textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-  statusLine.textContent = statusText(new Date());
+  greetingEl.textContent = `${part}, ${getOwnerName() || OWNER_NAME}`;
+  dateLineEl.textContent = today.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+
+  const { statusMsg, mood, buddyLine, ringOffset } = heroStatus(today);
+  statusLine.textContent = statusMsg;
+  ringProgress.style.strokeDashoffset = String(ringOffset);
+  buddyEl.classList.remove("mood-happy", "mood-concerned", "mood-calm");
+  buddyEl.classList.add("mood-" + mood);
+  buddyLineEl.textContent = buddyLine;
+  buddyLineEl.hidden = !buddyLine;
+}
+
+// today's done/total, for the progress ring — a non-recurring task counts as
+// done for today only the day it was actually completed; a recurring task
+// has no lingering completedAt (its dueAt just advances), so lastRecreatedAt
+// is what says "this one was finished today".
+function computeTodayProgress(today) {
+  const topLevel = allItems.filter((it) => !it.parentId);
+  let total = 0;
+  let done = 0;
+  topLevel.forEach((it) => {
+    const finishedToday = it.recurring
+      ? !!(it.lastRecreatedAt && daysBetween(it.lastRecreatedAt, today) === 0)
+      : !!(it.completedAt && daysBetween(it.completedAt, today) === 0);
+    const b = bucketOf(it, today);
+    const openToday = b === "overdue" || b === "today";
+    if (openToday || finishedToday) {
+      total++;
+      if (finishedToday) done++;
+    }
+  });
+  return { done, total };
+}
+
+function heroStatus(today) {
+  const statusMsg = statusText(today);
+  const open = allItems.filter((it) => !it.parentId && bucketOf(it, today) !== "done");
+  const overdue = open.filter((it) => bucketOf(it, today) === "overdue").length;
+  const { done, total } = computeTodayProgress(today);
+
+  let mood = "calm";
+  let buddyLine = "";
+  if (overdue) {
+    mood = "concerned";
+    buddyLine =
+      overdue === 1 ? "One thing slipped past — want to tackle it first?" : `${overdue} things slipped past — want to tackle them first?`;
+  } else if (total > 0 && done === total) {
+    mood = "happy";
+    buddyLine = "Everything's done for today. Nice work.";
+  }
+
+  const ratio = total ? done / total : 1;
+  const ringOffset = RING_CIRC * (1 - ratio);
+  return { statusMsg, mood, buddyLine, ringOffset };
 }
 
 function statusText(today) {
@@ -403,25 +498,29 @@ const BUCKETS = [
   { key: "done", label: "Done", cls: "" },
 ];
 
-// Each window includes everything more urgent than it, so they nest:
-// Today ⊂ This week ⊂ This month. Overdue always rides along — hiding
-// something you've already missed would be the opposite of helpful.
-// One chip per section — picking "This month" shows the month's work and
-// nothing else, rather than everything due sooner as well.
-const FILTERS = [{ key: "all", label: "All" }].concat(
-  BUCKETS.map((b) => ({ key: b.key, label: b.label }))
-);
+// Four grouped chips rather than one per bucket: Today folds in anything
+// already overdue (hiding something you've missed would be the opposite of
+// helpful), Upcoming covers everything not due yet, and All/Done bookend it.
+const FILTER_GROUPS = {
+  today: ["overdue", "today"],
+  upcoming: ["week", "month", "later"],
+  all: ["overdue", "today", "week", "month", "later", "done"],
+  done: ["done"],
+};
+const FILTERS = [
+  { key: "today", label: "Today" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "all", label: "All" },
+  { key: "done", label: "Done" },
+];
 
 const SECTION_CAP = 7;
 
 function matchesFilter(item, today) {
-  if (activeFilter === "all") return true;
-  return bucketOf(item, today) === activeFilter;
+  return FILTER_GROUPS[activeFilter].includes(bucketOf(item, today));
 }
 
 function renderFilterBar() {
-  filterBar.hidden = view !== "list";
-  if (filterBar.hidden) return;
   filterBar.innerHTML = "";
   FILTERS.forEach((f) => {
     const btn = document.createElement("button");
@@ -562,12 +661,28 @@ function renderItemNode(item, childrenMap, today, depth) {
   // squeeze the title into a two-line stack on a narrow screen.
   const sub = subLine(item, childrenMap);
   const pill = depth === 0 ? duePill(item, today) : "";
-  if (sub || pill) {
+  const wa = depth === 0 && item.whatsapp && !item.completedAt ? item.whatsapp : null;
+  if (sub || pill || wa) {
     const meta = document.createElement("div");
     meta.className = "row-meta";
     meta.innerHTML = pill + (sub ? `<span class="row-sub">${sub}</span>` : "");
     const editable = meta.querySelector(".pill-edit");
     if (editable) editable.addEventListener("click", (e) => openReminderEditor(item, e));
+
+    if (wa) {
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "row-wa";
+      send.title = "Send on WhatsApp";
+      send.innerHTML = iconChat + "<span></span>";
+      send.querySelector("span").textContent = wa.name || "Send";
+      send.addEventListener("click", (e) => {
+        e.stopPropagation();
+        sendWhatsapp(item);
+      });
+      meta.appendChild(send);
+    }
+
     body.appendChild(meta);
   }
 
@@ -593,10 +708,26 @@ function renderItemNode(item, childrenMap, today, depth) {
   del.type = "button";
   del.setAttribute("aria-label", "Delete");
   del.innerHTML = iconTrash;
-  del.addEventListener("click", () => removeItem(item.id));
+  del.addEventListener("click", () => {
+    removeItem(item.id);
+    if (depth === 0) showToast("Deleted");
+  });
 
   actions.appendChild(addSub);
   actions.appendChild(del);
+
+  // Only top-level tasks get a detail screen — a subtask's "steps" would be
+  // one level too deep to be worth its own full-screen view.
+  if (depth === 0) {
+    const open = document.createElement("button");
+    open.className = "row-open";
+    open.type = "button";
+    open.setAttribute("aria-label", "Open task");
+    open.innerHTML = iconChevron;
+    open.addEventListener("click", () => openDetail(item.id));
+    actions.appendChild(open);
+  }
+
   row.appendChild(actions);
   wrap.appendChild(row);
 
@@ -655,20 +786,240 @@ function renderInlineAdd(parent) {
   return row;
 }
 
+// ---------------- task detail (full screen) ----------------
+function openDetail(id) {
+  detailItemId = id;
+  renderDetail();
+  detailScreen.hidden = false;
+}
+
+function closeDetail() {
+  detailScreen.hidden = true;
+  detailItemId = null;
+}
+
+function renderDetail() {
+  const item = allItems.find((i) => i.id === detailItemId);
+  if (!item) {
+    closeDetail();
+    return;
+  }
+  const today = new Date();
+  const done = !!(item.completedAt && !item.recurring);
+
+  detailCheck.classList.toggle("done", done);
+  detailTitle.textContent = item.title;
+  detailTitle.classList.toggle("done", done);
+
+  const when = { dueAt: item.dueAt, hasTime: !!item.hasTime, intervalDays: item.recurring ? item.recurring.intervalDays : null };
+  detailReminderValue.textContent = describeWhen(when) || "None";
+
+  const wa = item.whatsapp;
+  detailWhatsappValue.textContent = wa ? wa.name || prettyPhone(wa.phone) || "Ready" : "None";
+  detailWhatsappSend.hidden = !wa;
+
+  const childrenMap = buildChildrenMap(allItems);
+  const kids = childrenMap.get(item.id) || [];
+  detailStepsLabel.textContent = kids.length ? `${kids.filter((k) => k.completedAt).length} of ${kids.length} done` : "";
+  detailStepsList.innerHTML = "";
+  kids.forEach((k) => {
+    const row = document.createElement("div");
+    row.className = "detail-step-row";
+
+    const check = document.createElement("button");
+    check.type = "button";
+    check.className = "check" + (k.completedAt ? " done" : "");
+    check.setAttribute("aria-label", "Mark step done");
+    check.innerHTML = iconCheck;
+    check.addEventListener("click", async () => {
+      await completeItem(k, check);
+      renderDetail();
+    });
+
+    const title = document.createElement("span");
+    title.className = "detail-step-title" + (k.completedAt ? " done" : "");
+    title.textContent = k.title;
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "row-delete";
+    del.setAttribute("aria-label", "Delete step");
+    del.innerHTML = iconTrash;
+    del.addEventListener("click", async () => {
+      await removeItem(k.id);
+      renderDetail();
+    });
+
+    row.appendChild(check);
+    row.appendChild(title);
+    row.appendChild(del);
+    detailStepsList.appendChild(row);
+  });
+
+  detailFootnote.textContent = `Added ${dayLabel(item.createdAt, today)}.`;
+}
+
+detailBack.addEventListener("click", closeDetail);
+detailDelete.addEventListener("click", async () => {
+  if (!detailItemId) return;
+  await removeItem(detailItemId);
+  closeDetail();
+  showToast("Deleted");
+});
+detailCheck.addEventListener("click", async () => {
+  const item = allItems.find((i) => i.id === detailItemId);
+  if (!item) return;
+  await completeItem(item, detailCheck);
+  renderDetail();
+});
+detailTitle.addEventListener("blur", async () => {
+  const item = allItems.find((i) => i.id === detailItemId);
+  if (!item) return;
+  const v = detailTitle.textContent.trim();
+  if (v && v !== item.title) await saveUpdate(item.id, { title: v });
+  else detailTitle.textContent = item.title;
+});
+detailTitle.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    detailTitle.blur();
+  }
+});
+detailReminderRow.addEventListener("click", (e) => {
+  const item = allItems.find((i) => i.id === detailItemId);
+  if (!item) return;
+  openReminderEditor(item, e);
+});
+
+let detailStepCommitted = false;
+async function commitDetailStep() {
+  if (detailStepCommitted) return;
+  detailStepCommitted = true;
+  const v = detailStepInput.value.trim();
+  const parentId = detailItemId;
+  detailStepInput.value = "";
+  if (v && parentId) {
+    const created = await db.add({ title: v, parentId });
+    pushItem(created);
+  }
+  detailStepCommitted = false;
+  await loadAll();
+  renderDetail();
+}
+detailStepAddBtn.addEventListener("click", commitDetailStep);
+detailStepInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    commitDetailStep();
+  }
+});
+
+// ---------------- whatsapp hand-off ----------------
+// Opening WhatsApp has to happen inside the tap that asked for it —
+// browsers block a window opened from a timer, and that's also the honest
+// design: Buddy gets the message ready, you're still the one sending it.
+function sendWhatsapp(item) {
+  const wa = item && item.whatsapp;
+  if (!wa) return;
+  window.open(waLink(wa.phone, wa.text || item.title), "_blank", "noopener");
+}
+
+function updateWaResolved() {
+  const digits = normalizePhone(waPhone.value, getCountryCode());
+  const typed = waPhone.value.trim();
+  if (!typed) {
+    waResolved.textContent = "No number — WhatsApp will ask who to send to.";
+    waResolved.classList.remove("warn");
+    return;
+  }
+  const needsCode = !getCountryCode() && /^0/.test(typed.replace(/\D/g, ""));
+  waResolved.textContent = needsCode
+    ? `Will open ${prettyPhone(digits)} — set a country code in Settings if that's wrong.`
+    : `Will open ${prettyPhone(digits)}`;
+  waResolved.classList.toggle("warn", needsCode);
+}
+
+function openWaSheet(id) {
+  const item = allItems.find((i) => i.id === id);
+  if (!item) return;
+  waEditingId = id;
+
+  const wa = item.whatsapp || {};
+  waName.value = wa.name || "";
+  waPhone.value = wa.phone ? prettyPhone(wa.phone) : "";
+  waText.value = wa.text || item.title;
+  waPickBtn.hidden = !contactPickerSupported;
+  updateWaResolved();
+
+  waOverlay.hidden = false;
+  requestAnimationFrame(() => waOverlay.classList.add("show"));
+}
+
+function closeWaSheet() {
+  waOverlay.classList.remove("show");
+  setTimeout(() => {
+    waOverlay.hidden = true;
+  }, 180);
+  waEditingId = null;
+}
+
+async function saveWa(payload) {
+  const id = waEditingId;
+  if (!id) return;
+  closeWaSheet();
+  await saveUpdate(id, { whatsapp: payload });
+  // the pending trigger was built without this payload — rebuild it so the
+  // notification carries the Send action
+  const updated = allItems.find((i) => i.id === id);
+  if (updated) scheduleTrigger(updated);
+  showToast(payload ? "WhatsApp message saved" : "WhatsApp message removed");
+}
+
+detailWhatsappRow.addEventListener("click", () => {
+  if (detailItemId) openWaSheet(detailItemId);
+});
+detailWhatsappSend.addEventListener("click", () => {
+  const item = allItems.find((i) => i.id === detailItemId);
+  if (item) sendWhatsapp(item);
+});
+
+waClose.addEventListener("click", closeWaSheet);
+waOverlay.addEventListener("click", (e) => {
+  if (e.target === waOverlay) closeWaSheet();
+});
+waPhone.addEventListener("input", updateWaResolved);
+
+waPickBtn.addEventListener("click", async () => {
+  const picked = await pickContact();
+  if (!picked) return;
+  if (picked.name) waName.value = picked.name;
+  if (picked.phone) waPhone.value = picked.phone;
+  updateWaResolved();
+});
+
+waSave.addEventListener("click", () => {
+  const phone = normalizePhone(waPhone.value, getCountryCode());
+  const text = waText.value.trim();
+  const name = waName.value.trim();
+  if (!phone && !text) {
+    saveWa(null); // nothing to hand off
+    return;
+  }
+  saveWa({ phone, name, text });
+});
+
+waRemove.addEventListener("click", () => saveWa(null));
+
 function render() {
   const today = new Date();
   renderGreeting();
-
-  listsEl.hidden = view !== "list";
-  calendarWrap.hidden = view !== "calendar";
   renderFilterBar();
-
-  if (view === "list") renderListView(today);
-  else renderCalendarView();
-
+  renderListView(today);
+  renderCalendarView();
   renderInsight(today);
   pollDueReminders(allItems);
   positionPicker(); // the row it's anchored to may have moved buckets
+  if (detailItemId) renderDetail(); // reminder edits land while the detail screen is open
 }
 
 function renderListView(today) {
@@ -725,26 +1076,60 @@ function renderListView(today) {
         ? "Nothing on your plate. Tell me what's on your mind."
         : activeFilter === "done"
         ? "Nothing finished yet."
-        : activeFilter === "later"
-        ? "Nothing parked for later."
-        : "Nothing due in this window.";
+        : activeFilter === "upcoming"
+        ? "Nothing coming up yet."
+        : "Nothing due today.";
     listsEl.appendChild(hint);
   }
 }
 
+// Recurring tasks not currently overdue, out of all recurring tasks — a
+// simple "on track" read on your habits without trying to reconstruct a
+// full completion-streak history from the data model.
+function computeHabitStat(items, today) {
+  const habits = items.filter((it) => it.recurring && !it.parentId);
+  if (!habits.length) return null;
+  const onTrack = habits.filter((it) => bucketOf(it, today) !== "overdue").length;
+  return { onTrack, total: habits.length };
+}
+
+function renderStats(today) {
+  statsRow.innerHTML = "";
+  const { done, total } = computeTodayProgress(today);
+  const habitStat = computeHabitStat(allItems, today);
+
+  const cards = [{ value: `${done}/${total}`, label: "Today's tasks done" }];
+  if (habitStat) cards.push({ value: `${habitStat.onTrack}/${habitStat.total}`, label: "Habits on track" });
+
+  cards.forEach((c) => {
+    const card = document.createElement("div");
+    card.className = "stat-card";
+    card.innerHTML = `<p class="stat-value">${c.value}</p><p class="stat-label">${c.label}</p>`;
+    statsRow.appendChild(card);
+  });
+}
+
 function renderInsight(today) {
+  renderStats(today);
+
   const flags = computeFlags(allItems, today);
   insightBody.innerHTML = "";
-  contentEl.classList.toggle("has-nudges", flags.length > 0);
-  if (!flags.length) return;
+
+  if (!flags.length) {
+    insightBody.innerHTML =
+      '<div class="nudge-empty"><p>Nothing has slipped</p><p>Every repeating task is inside its usual window. I’ll speak up when one drifts more than two days late.</p></div>';
+    return;
+  }
 
   flags.forEach((f) => {
     const card = document.createElement("div");
     card.className = "nudge";
     card.innerHTML =
-      `<div class="nudge-tag">${iconSpark} BUDDY'S TAKE</div>` +
+      '<div class="nudge-avatar" aria-hidden="true"></div>' +
+      '<div class="nudge-bubble">' +
       '<p class="nudge-text"></p>' +
-      '<div class="nudge-actions"><button class="nudge-add">Add nudge</button><button class="nudge-dismiss">Not now</button></div>';
+      '<div class="nudge-actions"><button class="nudge-add">Remind me today</button><button class="nudge-dismiss">Not now</button></div>' +
+      "</div>";
     card.querySelector(".nudge-text").textContent = messageFor(f);
     card.querySelector(".nudge-add").addEventListener("click", () => recreateItem(f.item));
     card.querySelector(".nudge-dismiss").addEventListener("click", () => {
@@ -766,21 +1151,27 @@ function renderCalendarView() {
   const header = document.createElement("div");
   header.className = "cal-header";
   header.innerHTML = `
+    <div class="cal-header-text">
+      <p class="eyebrow">Reminders only</p>
+      <h2>${calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
+    </div>
+    <button type="button" class="cal-today" id="calToday">Today</button>
     <button type="button" class="cal-nav" id="calPrev" aria-label="Previous month">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5l-5 5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <h2>${calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
     <button type="button" class="cal-nav" id="calNext" aria-label="Next month">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 5l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <button type="button" class="cal-today" id="calToday">Today</button>
   `;
   calendarWrap.appendChild(header);
+
+  const card = document.createElement("div");
+  card.className = "cal-card";
 
   const weekdayRow = document.createElement("div");
   weekdayRow.className = "cal-weekdays";
   weekdayRow.innerHTML = WEEKDAY_LABELS.map((d) => `<span>${d}</span>`).join("");
-  calendarWrap.appendChild(weekdayRow);
+  card.appendChild(weekdayRow);
 
   const grid = document.createElement("div");
   grid.className = "cal-grid";
@@ -801,11 +1192,12 @@ function renderCalendarView() {
       grid.appendChild(cellEl);
     });
   });
-  calendarWrap.appendChild(grid);
+  card.appendChild(grid);
+  calendarWrap.appendChild(card);
 
   const note = document.createElement("p");
   note.className = "cal-note";
-  note.textContent = "Only tasks with a reminder show up here.";
+  note.textContent = "Only tasks carrying a reminder appear here. Tap any day to see it, or to add one for that date.";
   calendarWrap.appendChild(note);
 
   calendarWrap.querySelector("#calPrev").addEventListener("click", () => {
@@ -1013,11 +1405,13 @@ async function completeItem(item, buttonEl) {
   } else {
     await saveUpdate(item.id, { completedAt: completing ? now : null });
   }
+  if (completing) showToast(item.recurring ? `Nice. Back again ${repeatLabel(item.recurring.intervalDays)}.` : "Nice one.");
 }
 
 async function recreateItem(item) {
   const now = new Date().toISOString();
   await saveUpdate(item.id, { dueAt: now, lastRecreatedAt: now, completedAt: null });
+  showToast("Moved to today");
 }
 
 async function removeItem(id) {
@@ -1033,9 +1427,7 @@ async function addFromCapture() {
   const raw = input.value.trim();
   if (!raw) return;
   const parsed = parseInput(raw, new Date());
-  const when = whenTouched
-    ? pendingWhen
-    : { dueAt: parsed.dueAt, hasTime: !!parsed.hasTime, intervalDays: parsed.intervalDays };
+  const when = effectiveWhen();
 
   const item = await db.add({
     title: parsed.title,
@@ -1048,39 +1440,302 @@ async function addFromCapture() {
   justAddedId = item.id;
   input.value = "";
   resetPendingWhen();
+  closeComposer();
+  const desc = describeWhen(when);
+  showToast(desc ? `Added · ${desc}` : "Added to your list");
   await loadAll();
 }
 
-// ---------------- capture UI ----------------
-input.addEventListener("input", () => {
-  if (whenTouched) return;
+// ---------------- composer sheet ----------------
+// Overridden fields (whenTouched) win; otherwise the reminder is whatever
+// the typed text parses to right now — re-derived on demand rather than
+// written into pendingWhen on every keystroke.
+function effectiveWhen() {
+  if (whenTouched) return pendingWhen;
   const v = input.value.trim();
   const parsed = v ? parseInput(v, new Date()) : { dueAt: null, hasTime: false, intervalDays: null };
-  pendingWhen = { dueAt: parsed.dueAt, hasTime: !!parsed.hasTime, intervalDays: parsed.intervalDays };
-  renderWhenRow();
+  return { dueAt: parsed.dueAt, hasTime: !!parsed.hasTime, intervalDays: parsed.intervalDays };
+}
+
+function updateComposer() {
+  const w = effectiveWhen();
+  const desc = describeWhen(w);
+  parseChip.textContent = desc || "No reminder — just a to-do";
+  parseChip.classList.toggle("set", !!desc);
+
+  const dayOffset = w.dueAt ? daysBetween(w.dueAt, new Date()) : null;
+  quickDay.querySelectorAll("button").forEach((b) => {
+    const key = b.dataset.day;
+    const on =
+      key === "none"
+        ? !w.dueAt
+        : key === "today"
+        ? dayOffset === 0
+        : key === "tomorrow"
+        ? dayOffset === 1
+        : key === "nextweek"
+        ? dayOffset === 7
+        : false;
+    b.setAttribute("aria-pressed", String(on));
+  });
+
+  const curTime = w.hasTime && w.dueAt ? new Date(w.dueAt).toTimeString().slice(0, 5) : null;
+  quickTime.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(curTime === b.dataset.time));
+  });
+
+  const curRepeat = w.intervalDays ? String(w.intervalDays) : "";
+  quickRepeat.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.repeat === curRepeat));
+  });
+
+  saveDraftBtn.textContent = w.dueAt || w.intervalDays ? "Save reminder" : "Save task";
+}
+
+function showComposerSheet() {
+  updateComposer();
+  composerOverlay.hidden = false;
+  requestAnimationFrame(() => composerOverlay.classList.add("show"));
+}
+
+function openComposer() {
+  input.value = "";
+  pendingWhen = { dueAt: null, hasTime: false, intervalDays: null };
+  whenTouched = false;
+  showComposerSheet();
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeComposer() {
+  composerOverlay.classList.remove("show");
+  setTimeout(() => {
+    composerOverlay.hidden = true;
+  }, 180);
+}
+
+function quickDayDate(key) {
+  if (key === "today") return startOfDay(new Date());
+  if (key === "tomorrow") return addDays(startOfDay(new Date()), 1);
+  if (key === "nextweek") return addDays(startOfDay(new Date()), 7);
+  return null;
+}
+
+addTaskPill.addEventListener("click", () => openComposer());
+composerClose.addEventListener("click", () => closeComposer());
+composerOverlay.addEventListener("click", (e) => {
+  if (e.target === composerOverlay) closeComposer();
 });
+
+quickDay.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const w = effectiveWhen();
+    whenTouched = true;
+    const key = btn.dataset.day;
+    if (key === "none") {
+      pendingWhen = { dueAt: null, hasTime: false, intervalDays: w.intervalDays };
+    } else {
+      const next = quickDayDate(key);
+      if (w.hasTime && w.dueAt) {
+        const prev = new Date(w.dueAt);
+        next.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+      }
+      pendingWhen = { dueAt: next.toISOString(), hasTime: w.hasTime, intervalDays: w.intervalDays };
+    }
+    updateComposer();
+  });
+});
+
+quickTime.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const w = effectiveWhen();
+    whenTouched = true;
+    const [h, m] = btn.dataset.time.split(":").map(Number);
+    const base = w.dueAt ? new Date(w.dueAt) : startOfDay(new Date());
+    base.setHours(h, m, 0, 0);
+    pendingWhen = { dueAt: base.toISOString(), hasTime: true, intervalDays: w.intervalDays };
+    updateComposer();
+  });
+});
+
+quickRepeat.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const w = effectiveWhen();
+    whenTouched = true;
+    const intervalDays = btn.dataset.repeat ? parseInt(btn.dataset.repeat, 10) : null;
+    const dueAt = intervalDays && !w.dueAt ? startOfDay(new Date()).toISOString() : w.dueAt;
+    pendingWhen = { dueAt, hasTime: w.hasTime, intervalDays };
+    updateComposer();
+  });
+});
+
+// ---------------- capture UI ----------------
+input.addEventListener("input", () => updateComposer());
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
   addFromCapture();
 });
 
-// ---------------- view toggle ----------------
-viewListBtn.addEventListener("click", () => setView("list"));
-viewCalendarBtn.addEventListener("click", () => setView("calendar"));
-function setView(v) {
-  view = v;
-  viewListBtn.setAttribute("aria-pressed", String(v === "list"));
-  viewCalendarBtn.setAttribute("aria-pressed", String(v === "calendar"));
-  render();
+saveDraftBtn.addEventListener("click", () => addFromCapture());
+
+// ---------------- tab bar ----------------
+const panels = { today: panelToday, calendar: panelCalendar, buddy: panelBuddy, settings: panelSettings };
+const tabButtons = { today: tabToday, calendar: tabCalendar, buddy: tabBuddy, settings: tabSettings };
+
+function setTab(next) {
+  tab = next;
+  Object.entries(tabButtons).forEach(([k, b]) => b.setAttribute("aria-pressed", String(k === tab)));
+  Object.entries(panels).forEach(([k, el]) => {
+    el.hidden = k !== tab;
+  });
+  todayHero.hidden = tab !== "today";
+  if (tab === "settings") {
+    reflectThemeButtons();
+    reflectToggles();
+    renderLockPreview(new Date());
+  }
 }
+
+Object.entries(tabButtons).forEach(([k, b]) => b.addEventListener("click", () => setTab(k)));
+settingsGearBtn.addEventListener("click", () => setTab("settings"));
+
 dayModalOverlay.addEventListener("click", (e) => {
   if (e.target === dayModalOverlay) closeDayModal();
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (!dayModalOverlay.hidden) closeDayModal();
-  else if (!whenPicker.hidden) toggleWhenPicker(false);
+  if (!whenPicker.hidden) toggleWhenPicker(false);
+  else if (!waOverlay.hidden) closeWaSheet();
+  else if (!dayModalOverlay.hidden) closeDayModal();
+  else if (!composerOverlay.hidden) closeComposer();
+  else if (!detailScreen.hidden) closeDetail();
+});
+
+// ---------------- settings ----------------
+const VOICE_AUTO_HINTS = {
+  true: "Creates the task the moment you stop talking.",
+  false: "Fills in what you said — press Enter or tap + to create it.",
+};
+
+function reflectThemeButtons() {
+  const color = getColorTheme();
+  const mode = getMode();
+  const fontScale = getFontScale();
+  const voiceAuto = String(getVoiceAutoCreate());
+
+  themeGrid.querySelectorAll(".theme-swatch").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.colorTheme === color));
+  });
+  modeSwitch.querySelectorAll("button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.mode === mode));
+  });
+  fontSizeSwitch.querySelectorAll("button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.fontScale === fontScale));
+  });
+  voiceAutoSwitch.querySelectorAll("button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.voiceAuto === voiceAuto));
+  });
+  voiceAutoHint.textContent = VOICE_AUTO_HINTS[voiceAuto];
+}
+
+// A browser notification permission, once granted, can't be revoked from
+// JS — only from the browser's own site settings — so this toggle can only
+// ever turn itself on; "off" just means "not asked yet".
+function reflectToggles() {
+  const granted = notificationsSupported && Notification.permission === "granted";
+  notifToggleSwitch.classList.toggle("on", granted);
+  notifToggleHint.textContent = !notificationsSupported
+    ? "Not supported in this browser."
+    : granted
+    ? "On — change this in your browser's site settings to turn off."
+    : "Buddy will ask your browser for permission.";
+
+  syncToggleSwitch.classList.toggle("on", isSyncEnabled());
+
+  const automationOn = getAutomationPayload();
+  automationToggleSwitch.classList.toggle("on", automationOn);
+  automationToggleHint.textContent = automationOn
+    ? `WhatsApp reminders carry a ${AUTOMATION_TAG} link an automation app can act on.`
+    : "Adds a link to WhatsApp reminders so MacroDroid or Tasker can send them for you.";
+
+  countryCodeInput.value = getCountryCode();
+}
+
+automationToggleRow.addEventListener("click", () => {
+  setAutomationPayload(!getAutomationPayload());
+  reflectToggles();
+  // already-scheduled triggers carry the old body — rebuild the affected
+  // ones so the change reaches reminders that are already pending
+  allItems.filter((it) => it.whatsapp && it.dueAt).forEach((it) => scheduleTrigger(it));
+});
+
+countryCodeInput.addEventListener("change", () => {
+  setCountryCode(countryCodeInput.value);
+  countryCodeInput.value = getCountryCode();
+});
+
+notifToggleRow.addEventListener("click", async () => {
+  if (!notificationsSupported) return;
+  if (Notification.permission === "granted") {
+    showToast("Already on — turn off from your browser's site settings");
+    return;
+  }
+  await requestPermission();
+  reflectToggles();
+  refreshBell();
+});
+
+syncToggleRow.addEventListener("click", () => {
+  if (isSyncEnabled()) return;
+  showToast("Needs a Firebase config first");
+});
+
+// An illustration of what a reminder notification looks like, filled in
+// with the most urgent real task — a PWA can't actually render on the OS
+// lock screen, so this just shows the intent.
+function renderLockPreview(today) {
+  lockPreviewDate.textContent = today.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  lockPreviewTime.textContent = today.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+  const open = allItems.filter((it) => !it.parentId && ["overdue", "today"].includes(bucketOf(it, today)));
+  sortBucket(open);
+  const item = open[0];
+
+  if (!item) {
+    lockCard.hidden = true;
+    lockPreviewEmpty.hidden = false;
+    return;
+  }
+  lockPreviewEmpty.hidden = true;
+  lockCard.hidden = false;
+  lockCardTitle.textContent = item.title;
+  const when = { dueAt: item.dueAt, hasTime: !!item.hasTime, intervalDays: item.recurring ? item.recurring.intervalDays : null };
+  lockCardSub.textContent = describeWhen(when) || "Reminder";
+}
+
+themeGrid.querySelectorAll(".theme-swatch").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setColorTheme(btn.dataset.colorTheme);
+    reflectThemeButtons();
+  });
+});
+modeSwitch.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setMode(btn.dataset.mode);
+    reflectThemeButtons();
+  });
+});
+fontSizeSwitch.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setFontScale(btn.dataset.fontScale);
+    reflectThemeButtons();
+  });
+});
+voiceAutoSwitch.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setVoiceAutoCreate(btn.dataset.voiceAuto === "true");
+    reflectThemeButtons();
+  });
 });
 
 // ---------------- voice ----------------
@@ -1088,10 +1743,19 @@ if (!voiceSupported) {
   micBtn.style.display = "none";
 } else {
   let recording = false;
+  // Voice is a single "say it, it's done" gesture — no Enter, no tapping +.
+  // Only fire that once real speech actually came back this session, and
+  // not if it errored out (offline, blocked mic) with nothing usable said —
+  // otherwise a failed listen could silently submit whatever stale text was
+  // already sitting in the box before the mic was tapped.
+  let voiceHeardSomething = false;
+  let voiceHadError = false;
 
   const voice = createVoiceInput({
     onStart() {
       recording = true;
+      voiceHeardSomething = false;
+      voiceHadError = false;
       voiceTranscript.textContent = "Listening…";
       voiceStatus.hidden = true;
       voiceOverlay.hidden = false;
@@ -1100,14 +1764,20 @@ if (!voiceSupported) {
     onEnd() {
       recording = false;
       closeVoiceOverlay();
+      if (voiceHeardSomething && !voiceHadError) {
+        if (getVoiceAutoCreate()) addFromCapture();
+        else showComposerSheet(); // review mode — sheet was hidden while listening
+      }
     },
     onResult(text) {
+      voiceHeardSomething = !!text.trim();
       voiceTranscript.textContent = text ? `“${text}”` : "Listening…";
       input.value = text;
       input.dispatchEvent(new Event("input"));
     },
     onError(reason) {
       recording = false;
+      voiceHadError = true;
       closeVoiceOverlay();
       const messages = {
         blocked: "Microphone access is blocked — check your browser settings, or type instead.",
@@ -1191,7 +1861,63 @@ initSync({
   },
 });
 
+// ---------------- onboarding (first run only) ----------------
+function startOnboarding() {
+  let step = 0;
+  onboardName.value = getOwnerName();
+
+  function renderStep() {
+    if (step === 0) {
+      onboardTitle.textContent = "Hi, I'm Buddy.";
+      onboardBody.textContent =
+        "Tell me what's on your mind — by typing or talking. I keep it on this phone, and I notice when something you usually do slips.";
+      onboardName.hidden = false;
+      onboardPrimary.textContent = "Let's go";
+      onboardSkip.textContent = "Skip for now";
+    } else {
+      onboardTitle.textContent = "Want me to nudge you?";
+      onboardBody.textContent =
+        "I'll only speak up for reminders you set, and when a repeating task drifts more than two days late. You can change this any time in Settings.";
+      onboardName.hidden = true;
+      onboardPrimary.textContent = "Turn on reminders";
+      onboardSkip.textContent = "Not now";
+    }
+  }
+
+  function finish(withNotif) {
+    const name = onboardName.value.trim();
+    if (name) setOwnerName(name);
+    setOnboarded();
+    onboardScreen.hidden = true;
+    if (withNotif) requestPermission().then(refreshBell);
+    renderGreeting();
+  }
+
+  onboardPrimary.addEventListener("click", () => {
+    if (step === 0) {
+      step = 1;
+      renderStep();
+    } else {
+      finish(true);
+    }
+  });
+  onboardSkip.addEventListener("click", () => {
+    if (step === 0) {
+      step = 1;
+      renderStep();
+    } else {
+      finish(false);
+    }
+  });
+
+  renderStep();
+  onboardScreen.hidden = false;
+}
+
 // ---------------- boot ----------------
-renderWhenRow();
+initTheme(); // index.html already set the attributes pre-paint; this just syncs the meta color and re-runs the same logic
+setTab("today");
+reflectThemeButtons();
 loadAll();
+if (!isOnboarded()) startOnboarding();
 setInterval(() => pollDueReminders(allItems), 45000);

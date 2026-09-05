@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Buddy Reminder</title>
+<meta name="description" content="A calm companion for getting things done — offline-first tasks and reminders that notice what you've forgotten.">
+<meta name="theme-color" content="#0f0e0d">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Buddy">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="buddy" id="buddy"></div>
+    <div class="topbar-text">
+      <h1 id="greetingText">&nbsp;</h1>
+      <p class="topbar-status" id="statusLine">&nbsp;</p>
+      <p class="eyebrow" id="dateLine" hidden></p>
+    </div>
+    <button type="button" class="bell" id="notifyEnable" aria-label="Turn on reminder notifications" title="Turn on notifications">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3a4.2 4.2 0 0 0-4.2 4.2c0 3.6-1.3 4.9-1.3 4.9h11S14.2 10.8 14.2 7.2A4.2 4.2 0 0 0 10 3zM8.5 14.6a1.7 1.7 0 0 0 3 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="bell-dot" id="notifyPrompt"></span>
+    </button>
+    <div class="view-switch" role="group" aria-label="View">
+      <button type="button" id="viewList" aria-pressed="true" aria-label="List view" title="List">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 5h9M7 10h9M7 15h9M3.6 5h.01M3.6 10h.01M3.6 15h.01" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" id="viewCalendar" aria-pressed="false" aria-label="Calendar view" title="Calendar">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4.5" width="14" height="12" rx="2.4"/><path d="M3 8.5h14M7 2.6v3M13 2.6v3" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="strip strip-offline" id="offlineBanner">
+    <span class="strip-dot"></span> Offline — everything still works
+  </div>
+
+  <main class="content" id="content">
+    <aside class="nudges" id="insightBody"></aside>
+    <div class="filter-bar" id="filterBar" role="group" aria-label="Filter tasks"></div>
+    <div class="lists" id="lists"></div>
+    <div class="calendar-wrap" id="calendarWrap" hidden></div>
+  </main>
+
+  <div class="composer">
+    <p class="voice-status" id="voiceStatus" hidden></p>
+
+    <div class="when-picker" id="whenPicker" hidden>
+      <p class="when-editing" id="whenEditing" hidden></p>
+      <div class="when-quick">
+        <button type="button" data-quick="today">Today</button>
+        <button type="button" data-quick="tomorrow">Tomorrow</button>
+        <button type="button" data-quick="nextweek">Next week</button>
+      </div>
+      <div class="when-fields">
+        <label class="when-field"><span>Date</span><input type="date" id="whenDate" /></label>
+        <label class="when-field"><span>Time</span><input type="time" id="whenTime" /></label>
+        <label class="when-field"><span>Repeat</span>
+          <select id="whenRepeat">
+            <option value="">Never</option>
+            <option value="1">Every day</option>
+            <option value="7">Every week</option>
+            <option value="14">Every 2 weeks</option>
+            <option value="30">Every month</option>
+          </select>
+        </label>
+        <button type="button" id="whenClear">Clear</button>
+      </div>
+    </div>
+
+    <div class="when-row" id="whenRow"></div>
+
+    <form id="captureForm">
+      <input id="captureInput" type="text" placeholder="Try “call Mom tomorrow at 8pm”…" autocomplete="off" />
+      <button type="button" class="mic-btn" id="micBtn" aria-label="Add by voice" title="Add by voice">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="6" height="10" rx="3"/><path d="M4 9.5a6 6 0 0 0 12 0M10 15.5v2.3M7 17.8h6" stroke-linecap="round"/></svg>
+      </button>
+      <button type="submit" class="add-btn" aria-label="Add task" title="Add task">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M10 4.2v11.6M4.2 10h11.6" stroke-linecap="round"/></svg>
+      </button>
+    </form>
+  </div>
+
+</div>
+
+<div class="voice-overlay" id="voiceOverlay" hidden>
+  <div class="voice-inner">
+    <div class="voice-orb"><div class="buddy voice-buddy"></div></div>
+    <p class="voice-transcript" id="voiceTranscript">Listening…</p>
+    <div class="waveform" id="waveform">
+      <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <button type="button" class="voice-stop" id="voiceStop">Stop</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="dayModalOverlay" hidden>
+  <div class="modal" id="dayModal" role="dialog" aria-modal="true"></div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

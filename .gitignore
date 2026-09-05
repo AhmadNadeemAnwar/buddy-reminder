@@ -1,0 +1,9 @@
+# Your own Firebase project keys — copied from firebase-config.example.js.
+# Not a hard secret, but there's no reason to publish it.
+js/firebase-config.js
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

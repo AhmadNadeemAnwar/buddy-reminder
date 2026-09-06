@@ -34,7 +34,11 @@ jobs:
           cache: gradle
 
       - run: npm ci
-      - run: npm run build:www
+      # Rebuilds www/ from source AND regenerates android/capacitor-cordova-
+      # android-plugins/ (Capacitor's own android/.gitignore excludes that
+      # folder — it's meant to be produced by `cap sync`, not committed, so
+      # a fresh checkout genuinely doesn't have it until this step runs).
+      - run: npm run sync:android
 
       - name: Build debug APK
         working-directory: android

@@ -129,6 +129,13 @@ Then in Android Studio: connect your phone by USB with Developer Options →
 USB debugging on, pick it as the run target, and click **Run**. That
 installs a debug-signed APK directly — no store, no fee.
 
+If a Gradle build fails right after `sync:android` with something like
+*"not a regular file"* or *"unable to determine incremental changes,"*
+that's this project living inside a OneDrive-synced folder — OneDrive can
+momentarily represent a freshly-written file as a cloud placeholder before
+Gradle gets to read it. It's a timing race, not a real problem: just run
+the build again.
+
 **What's different from the web build:** the app's own source (`index.html`,
 `css/`, `js/`, etc.) is untouched and still what GitHub Pages serves —
 `www/` is just a disposable, gitignored copy `npm run sync:android` builds

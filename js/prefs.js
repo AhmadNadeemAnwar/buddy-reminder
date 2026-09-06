@@ -95,3 +95,37 @@ export function setOllamaModel(model) {
   persist(OLLAMA_MODEL_KEY, String(model).trim());
 }
 
+// Which sound plays for a reminder — native app only, the web Notification
+// API has no way to set one. "" means the device's own default.
+const REMINDER_TONE_KEY = "buddy-reminder-tone";
+
+export function getReminderTone() {
+  return readString(REMINDER_TONE_KEY, "");
+}
+
+export function setReminderTone(tone) {
+  persist(REMINDER_TONE_KEY, String(tone || "").trim());
+}
+
+// An occasional, generic backup nudge for whatever's pending, in case the
+// specific in-app ones on the Buddy tab go unseen for a while. Off by
+// default, native only. Time is stored as "HH:MM" (24h).
+const DAILY_NUDGE_ON_KEY = "buddy-daily-nudge-enabled";
+const DAILY_NUDGE_TIME_KEY = "buddy-daily-nudge-time";
+
+export function getDailyNudgeEnabled() {
+  return readBool(DAILY_NUDGE_ON_KEY, false);
+}
+
+export function setDailyNudgeEnabled(value) {
+  persist(DAILY_NUDGE_ON_KEY, !!value);
+}
+
+export function getDailyNudgeTime() {
+  return readString(DAILY_NUDGE_TIME_KEY, "18:00");
+}
+
+export function setDailyNudgeTime(time) {
+  persist(DAILY_NUDGE_TIME_KEY, String(time || "18:00").trim());
+}
+

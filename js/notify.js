@@ -14,6 +14,8 @@
 //    (experimental; not supported in Firefox, Safari, or iOS home-screen
 //    PWAs — see README for the platform matrix).
 
+import { getReminderTone, getDailyNudgeEnabled, getDailyNudgeTime } from "./prefs.js";
+
 // No bundler in this project — Capacitor's native host injects `window.
 // Capacitor` directly into the WebView at runtime (that's how it supports
 // plain script-tag apps with no build step at all), so this reads that
@@ -49,6 +51,15 @@ function numericIdFor(id) {
   // Math.abs() on the boundary value would overflow that by 1, so mask the
   // sign bit off instead — guarantees [0, 2147483647].
   return (h & 0x7fffffff) || 1;
+}
+
+// The plugin resolves `sound` against our own www/sounds/*.wav (bundled
+// web assets, not res/raw — see sounds/synth.py) by exact filename, so the
+// stored tone id needs its extension added back. "" (device default) stays
+// undefined so the schedule() call omits the field entirely rather than
+// pointing at a file that doesn't exist.
+function soundFileFor(toneId) {
+  return toneId ? `${toneId}.wav` : undefined;
 }
 
 // On web, `Notification.permission` is a plain synchronously-readable
@@ -95,7 +106,7 @@ async function show(title, body, tag) {
       const { display } = await LocalNotifications.checkPermissions();
       if (display !== "granted") return;
       await LocalNotifications.schedule({
-        notifications: [{ id: numericIdFor(tag), title, body }],
+        notifications: [{ id: numericIdFor(tag), title, body, sound: soundFileFor(getReminderTone()) }],
       });
     } catch (e) {
       // best-effort — the item still shows in the in-app list either way
@@ -151,6 +162,7 @@ export async function scheduleTrigger(item) {
             id: numericIdFor(item.id),
             title: "Buddy Reminder",
             body: item.title,
+            sound: soundFileFor(getReminderTone()),
             schedule: { at: new Date(when), allowWhileIdle: true },
           },
         ],
@@ -186,5 +198,60 @@ export async function cancelTrigger(id) {
     await LocalNotifications.cancel({ notifications: [{ id: numericIdFor(id) }] });
   } catch (e) {
     // best-effort
+  }
+}
+
+// A generic backup nudge, in case the specific ones on the Buddy tab go
+// unseen — native only, off unless switched on in Settings. Notification
+// content is fixed the moment it's scheduled, not computed when it fires,
+// so this can't stay accurate on its own; instead it's re-armed as a fresh
+// one-shot every time app.js's loadAll() runs (effectively: every time the
+// app is opened or a task changes), using the same proven `at`-based
+// scheduling scheduleTrigger() already uses rather than an unverified
+// cron-style API. Content self-refreshes on ordinary use; if the app goes
+// unopened for several days the last-armed one fires once and doesn't
+// re-arm itself again until the app is next opened — no background
+// service, consistent with how the rest of this app's notifications work.
+const DAILY_NUDGE_ID = numericIdFor("__daily_nudge__");
+
+function nextOccurrence(hhmm, today) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const next = new Date(today);
+  next.setHours(h, m, 0, 0);
+  if (next.getTime() <= today.getTime()) next.setDate(next.getDate() + 1);
+  return next;
+}
+
+function dailyNudgeBody(flags) {
+  if (flags.length === 1) return `"${flags[0].item.title}" is still on your list — got a minute?`;
+  return `You've got ${flags.length} things waiting whenever you're ready.`;
+}
+
+export async function scheduleDailyNudge(flags, today = new Date()) {
+  if (!native) return;
+  if (!getDailyNudgeEnabled() || !flags.length) {
+    try {
+      await LocalNotifications.cancel({ notifications: [{ id: DAILY_NUDGE_ID }] });
+    } catch (e) {
+      // best-effort
+    }
+    return;
+  }
+  try {
+    const { display } = await LocalNotifications.checkPermissions();
+    if (display !== "granted") return;
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: DAILY_NUDGE_ID,
+          title: "Buddy Reminder",
+          body: dailyNudgeBody(flags),
+          sound: soundFileFor(getReminderTone()),
+          schedule: { at: nextOccurrence(getDailyNudgeTime(), today), allowWhileIdle: true },
+        },
+      ],
+    });
+  } catch (e) {
+    // best-effort — the Buddy-tab nudge still covers this
   }
 }

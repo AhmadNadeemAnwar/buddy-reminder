@@ -175,6 +175,36 @@
       </div>
 
       <div class="settings-section">
+        <p class="settings-label">Reminder tone</p>
+        <div class="mode-switch" id="toneSwitch" role="group" aria-label="Reminder tone">
+          <button type="button" data-tone="" aria-pressed="false">Default</button>
+          <button type="button" data-tone="chime" aria-pressed="false">Chime</button>
+          <button type="button" data-tone="bell" aria-pressed="false">Bell</button>
+          <button type="button" data-tone="pop" aria-pressed="false">Pop</button>
+        </div>
+        <p class="settings-hint">Native app only — a browser has no way to set a notification's sound. Tapping a tone plays it here so you can hear it first.</p>
+        <audio id="tonePreviewAudio" hidden></audio>
+      </div>
+
+      <div class="settings-section">
+        <p class="settings-label">Pending-task nudge</p>
+        <div class="toggle-card">
+          <button type="button" class="toggle-row" id="dailyNudgeToggleRow">
+            <span class="toggle-text">
+              <span class="toggle-label">Daily nudge for pending tasks</span>
+              <span class="toggle-hint">A gentle backup reminder about your list, in case the ones on the Buddy tab go unseen.</span>
+            </span>
+            <span class="toggle-switch" id="dailyNudgeToggleSwitch"><span class="toggle-knob"></span></span>
+          </button>
+        </div>
+        <div class="ollama-field" id="dailyNudgeTimeRow" hidden>
+          <span>Time</span>
+          <input type="time" id="dailyNudgeTimeInput" />
+        </div>
+        <p class="settings-hint">Native app only. Only sent when something's actually pending, and only fires once — it renews itself each time you open Buddy.</p>
+      </div>
+
+      <div class="settings-section">
         <p class="settings-label">Ask Buddy (local model)</p>
         <div class="toggle-card">
           <button type="button" class="toggle-row" id="ollamaToggleRow">

@@ -8,6 +8,7 @@ import {
   pollDueReminders,
   scheduleTrigger,
   cancelTrigger,
+  scheduleDailyNudge,
   getPermissionState,
   isNative,
 } from "./notify.js";
@@ -27,6 +28,12 @@ import {
   setOllamaUrl,
   getOllamaModel,
   setOllamaModel,
+  getReminderTone,
+  setReminderTone,
+  getDailyNudgeEnabled,
+  setDailyNudgeEnabled,
+  getDailyNudgeTime,
+  setDailyNudgeTime,
 } from "./prefs.js";
 import { isSyncEnabled } from "./sync.js";
 import { chat as ollamaChat, listModels, buildContext } from "./ollama.js";
@@ -130,6 +137,12 @@ const lockCard = document.getElementById("lockCard");
 const lockCardTitle = document.getElementById("lockCardTitle");
 const lockCardSub = document.getElementById("lockCardSub");
 const lockPreviewEmpty = document.getElementById("lockPreviewEmpty");
+const toneSwitch = document.getElementById("toneSwitch");
+const tonePreviewAudio = document.getElementById("tonePreviewAudio");
+const dailyNudgeToggleRow = document.getElementById("dailyNudgeToggleRow");
+const dailyNudgeToggleSwitch = document.getElementById("dailyNudgeToggleSwitch");
+const dailyNudgeTimeRow = document.getElementById("dailyNudgeTimeRow");
+const dailyNudgeTimeInput = document.getElementById("dailyNudgeTimeInput");
 
 // ask buddy (local model chat)
 const chatSection = document.getElementById("chatSection");
@@ -1380,6 +1393,10 @@ function escapeHtml(s) {
 async function loadAll() {
   allItems = await db.getAll();
   render();
+  // Re-armed every time anything changes (this is the one choke point
+  // every mutation already runs through), so its content — and whether it
+  // fires at all — stays as current as ordinary use allows.
+  scheduleDailyNudge(computeFlags(allItems, new Date()));
 }
 
 async function saveUpdate(id, patch) {
@@ -1652,6 +1669,11 @@ function reflectThemeButtons() {
     btn.setAttribute("aria-pressed", String(btn.dataset.voiceAuto === voiceAuto));
   });
   voiceAutoHint.textContent = VOICE_AUTO_HINTS[voiceAuto];
+
+  const tone = getReminderTone();
+  toneSwitch.querySelectorAll("button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String((btn.dataset.tone || "") === tone));
+  });
 }
 
 // A notification permission, once granted, can't be revoked from JS — only
@@ -1680,7 +1702,45 @@ function reflectToggles() {
   ollamaFields.hidden = !ollamaOn;
   ollamaUrlInput.value = getOllamaUrl();
   ollamaModelInput.value = getOllamaModel();
+
+  const dailyOn = getDailyNudgeEnabled();
+  dailyNudgeToggleSwitch.classList.toggle("on", dailyOn);
+  dailyNudgeTimeRow.hidden = !dailyOn;
+  dailyNudgeTimeInput.value = getDailyNudgeTime();
 }
+
+// Reschedules every currently-pending reminder so a changed tone (or a
+// disabled/re-enabled notification permission) applies retroactively, not
+// just to reminders created from now on — same rebuild-pending-triggers
+// pattern used whenever a setting that shapes an already-scheduled
+// notification changes.
+function rescheduleAllPendingTriggers() {
+  allItems.filter((it) => it.dueAt && !(it.completedAt && !it.recurring)).forEach((it) => scheduleTrigger(it));
+}
+
+toneSwitch.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const tone = btn.dataset.tone || "";
+    setReminderTone(tone);
+    reflectThemeButtons();
+    if (tone) {
+      tonePreviewAudio.src = `sounds/${tone}.wav`;
+      tonePreviewAudio.play().catch(() => {});
+    }
+    rescheduleAllPendingTriggers();
+  });
+});
+
+dailyNudgeToggleRow.addEventListener("click", () => {
+  setDailyNudgeEnabled(!getDailyNudgeEnabled());
+  reflectToggles();
+  scheduleDailyNudge(computeFlags(allItems, new Date()));
+});
+
+dailyNudgeTimeInput.addEventListener("change", () => {
+  setDailyNudgeTime(dailyNudgeTimeInput.value);
+  scheduleDailyNudge(computeFlags(allItems, new Date()));
+});
 
 ollamaToggleRow.addEventListener("click", () => {
   setOllamaEnabled(!getOllamaEnabled());

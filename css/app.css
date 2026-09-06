@@ -241,6 +241,11 @@ button { font-family: inherit; }
 
 /* ---------- content ---------- */
 .content { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 2px 20px 10px; }
+/* On Today, .hero already clears the status bar above this. The other
+   three tabs have nothing else up there, so .content needs to do it
+   itself whenever the hero is hidden — matches it via the DOM, not a JS
+   flag, so it can never drift out of sync with which tab is actually showing. */
+#todayHero[hidden] ~ #content { padding-top: calc(2px + env(safe-area-inset-top)); }
 
 /* filter row — scrolls sideways rather than wrapping on a narrow phone */
 .filter-bar { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 14px; scrollbar-width: none; }
@@ -684,7 +689,11 @@ button { font-family: inherit; }
 /* ---------- hero (Today tab): promoted Buddy, progress ring, greeting ---------- */
 .hero {
   flex: none; display: flex; align-items: center; gap: 14px;
-  padding: 20px 20px 16px;
+  /* env() is 0 in a plain browser tab, so this is a no-op on the web PWA —
+     it only does anything on the native app, where the WebView genuinely
+     renders behind the status bar. Invisible in every browser test this
+     shipped with; only showed up once it ran on a real device. */
+  padding: calc(20px + env(safe-area-inset-top)) 20px 16px;
 }
 .hero-buddy-wrap { position: relative; flex: none; width: 72px; height: 72px; display: grid; place-items: center; }
 .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }

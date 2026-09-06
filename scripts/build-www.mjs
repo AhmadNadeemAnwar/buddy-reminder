@@ -7,7 +7,7 @@
 // android/, package.json, this very script, etc.). www/ is gitignored and
 // fully regenerable — never hand-edit anything inside it.
 
-import { cpSync, rmSync, mkdirSync, existsSync } from "node:fs";
+import { cpSync, rmSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,4 +32,15 @@ for (const d of DIRS) {
   cpSync(src, join(wwwDir, d), { recursive: true });
 }
 
-console.log(`www/ built from ${FILES.length} files + ${DIRS.length} directories.`);
+// sounds/ also holds synth.py (how the tones were generated) — only the
+// .wav output actually belongs in the shipped bundle.
+const soundsSrc = join(root, "sounds");
+if (!existsSync(soundsSrc)) throw new Error("build-www: expected directory missing — sounds");
+const soundsDest = join(wwwDir, "sounds");
+mkdirSync(soundsDest, { recursive: true });
+const wavCount = readdirSync(soundsSrc).filter((f) => f.endsWith(".wav"));
+for (const f of wavCount) {
+  cpSync(join(soundsSrc, f), join(soundsDest, f));
+}
+
+console.log(`www/ built from ${FILES.length} files + ${DIRS.length} directories + ${wavCount.length} sounds.`);

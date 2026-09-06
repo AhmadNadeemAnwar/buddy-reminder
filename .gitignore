@@ -18,6 +18,8 @@ node_modules/
 www/
 android/app/build/
 android/build/
+# generated from sounds/ by scripts/sync-native-sounds.mjs
+android/app/src/main/res/raw/
 android/.gradle/
 android/local.properties
 android/captures/

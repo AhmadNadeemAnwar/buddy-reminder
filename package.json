@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build:www": "node scripts/build-www.mjs",
-    "sync:android": "npm run build:www && npx cap sync android",
+    "sync:android": "npm run build:www && node scripts/sync-native-sounds.mjs && npx cap sync android",
     "open:android": "npx cap open android",
     "run:android": "npm run sync:android && npx cap run android"
   },

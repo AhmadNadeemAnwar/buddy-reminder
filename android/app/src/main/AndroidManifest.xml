@@ -38,4 +38,13 @@
          batched by the OS. Manifest-only, auto-granted for a sideloaded
          personal app — no runtime prompt needed. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- The mic button. Without these the WebView's getUserMedia is denied
+         outright, so voice capture silently never works in the app even
+         though it works fine in the browser build.
+         Both are required: Capacitor's onPermissionRequest asks for
+         RECORD_AUDIO *and* MODIFY_AUDIO_SETTINGS together and ANDs the
+         results, so an undeclared MODIFY_AUDIO_SETTINGS comes back false
+         and the whole request is denied. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>

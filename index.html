@@ -86,7 +86,7 @@
     <section class="tab-panel" id="panelBuddy" hidden>
       <p class="eyebrow">Buddy's take</p>
       <h2 class="panel-title">What I've noticed</h2>
-      <p class="panel-sub">Worked out on your phone from your own repeat intervals. Nothing leaves the device.</p>
+      <p class="panel-sub">Worked out on your phone from your own repeat intervals and how long things have sat. Nothing leaves the device.</p>
       <div class="stats-row" id="statsRow"></div>
       <aside class="nudges" id="insightBody"></aside>
 
@@ -182,7 +182,7 @@
           <button type="button" data-tone="bell" aria-pressed="false">Bell</button>
           <button type="button" data-tone="pop" aria-pressed="false">Pop</button>
         </div>
-        <p class="settings-hint">Native app only — a browser has no way to set a notification's sound. Tapping a tone plays it here so you can hear it first.</p>
+        <p class="settings-hint" id="toneHint"></p>
         <audio id="tonePreviewAudio" hidden></audio>
       </div>
 
@@ -201,7 +201,7 @@
           <span>Time</span>
           <input type="time" id="dailyNudgeTimeInput" />
         </div>
-        <p class="settings-hint">Native app only. Only sent when something's actually pending, and only fires once — it renews itself each time you open Buddy.</p>
+        <p class="settings-hint" id="dailyNudgeHint"></p>
       </div>
 
       <div class="settings-section">

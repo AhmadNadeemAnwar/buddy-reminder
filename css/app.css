@@ -638,6 +638,10 @@ button { font-family: inherit; }
 /* ---------- settings ---------- */
 .settings-modal { gap: 22px; }
 .settings-section { display: flex; flex-direction: column; gap: 10px; }
+/* The panel is a plain block, so without this the groups run together — a
+   trailing hint line ends up sitting directly against the next group's
+   label. Matches the 22px .section rhythm used on the Today list. */
+.settings-section + .settings-section { margin-top: 22px; }
 .settings-label {
   margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .07em;
   text-transform: uppercase; color: var(--ink-faint);

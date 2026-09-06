@@ -139,6 +139,8 @@ const lockCardSub = document.getElementById("lockCardSub");
 const lockPreviewEmpty = document.getElementById("lockPreviewEmpty");
 const toneSwitch = document.getElementById("toneSwitch");
 const tonePreviewAudio = document.getElementById("tonePreviewAudio");
+const toneHint = document.getElementById("toneHint");
+const dailyNudgeHint = document.getElementById("dailyNudgeHint");
 const dailyNudgeToggleRow = document.getElementById("dailyNudgeToggleRow");
 const dailyNudgeToggleSwitch = document.getElementById("dailyNudgeToggleSwitch");
 const dailyNudgeTimeRow = document.getElementById("dailyNudgeTimeRow");
@@ -1019,7 +1021,7 @@ function renderInsight(today) {
 
   if (!flags.length) {
     insightBody.innerHTML =
-      '<div class="nudge-empty"><p>Nothing has slipped</p><p>Every repeating task is inside its usual window. I’ll speak up when one drifts more than two days late.</p></div>';
+      '<div class="nudge-empty"><p>Nothing has slipped</p><p>Every repeating task is inside its usual window, and nothing plain has been sitting too long. I’ll speak up when either changes.</p></div>';
     return;
   }
 
@@ -1691,6 +1693,17 @@ function reflectToggles() {
     : isNative
     ? "Buddy will ask Android for permission."
     : "Buddy will ask your browser for permission.";
+
+  // Both of these only do anything in the installed app, but saying "native
+  // app only" to someone who *is* in the native app is just confusing — so
+  // each side gets the sentence that's true where it's being read.
+  toneHint.textContent = isNative
+    ? "Tap a tone to hear it. This is what your reminders will sound like."
+    : "Native app only — a browser has no way to set a notification's sound. Tapping a tone plays it here so you can hear it first.";
+
+  dailyNudgeHint.textContent = isNative
+    ? "Only sent when something's actually pending, and only fires once — it renews itself each time you open Buddy."
+    : "Native app only. Only sent when something's actually pending, and only fires once — it renews itself each time you open Buddy.";
 
   syncToggleSwitch.classList.toggle("on", isSyncEnabled());
 

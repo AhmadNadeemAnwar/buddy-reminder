@@ -25,7 +25,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # The Capacitor CLI hard-requires >=22 and exits if it's older.
+          node-version: 22
 
       - uses: actions/setup-java@v4
         with:

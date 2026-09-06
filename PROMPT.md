@@ -36,7 +36,7 @@ A voice-and-UI task/reminder app that proactively notices patterns in what the u
 
 ## Data model (IndexedDB)
 
-Item: `{ id, title, dueAt, hasTime, recurring: { intervalDays } | null, whatsapp: { phone, name, text } | null, createdAt, completedAt, lastRecreatedAt, parentId }`
+Item: `{ id, title, dueAt, hasTime, recurring: { intervalDays } | null, createdAt, completedAt, lastRecreatedAt, parentId }`
 
 **There is no task-vs-reminder type.** Everything is a task. A "reminder"
 is just an optional `dueAt` (+ `hasTime`, + `recurring`) attached to a
@@ -57,34 +57,15 @@ rolls up into a `done/total` progress chip on the parent.
   navigation, and a day modal (tap a date) that lists that day's items
   and lets you add a new item — with its own repeat interval — for that
   specific date.
-- **WhatsApp hand-off**: a task can carry a message (`whatsapp`) —
-  recipient plus text — and Buddy gets it ready to send at the moment the
-  reminder fires: a Send button on the task row, on the task detail
-  screen, and as an action button on the notification itself, each
-  opening WhatsApp with the message pre-filled.
-
-  **It deliberately does not send by itself.** No browser can: there is
-  no free API for a personal WhatsApp account (the official Business API
-  is paid and needs a server), and an unofficial bridge would breach
-  WhatsApp's terms and risk the number being banned. Both routes are out
-  under the free-tier-only rule above, so the design puts the send one
-  tap away rather than faking automation it can't deliver.
-
-  Recipients come from the phone's own address book via the **Contact
-  Picker API** (Chrome on Android; one contact per pick, no standing
-  access), falling back to a typed number elsewhere — or to no number at
-  all, in which case WhatsApp asks who to send to. A country-code setting
-  converts locally-saved numbers (`0300 1234567`) into the international
-  form `wa.me` links require.
-
-  For users who do want it unattended, an opt-in **automation payload**
-  setting appends a `[BUDDY-WA] <wa.me link>` line to the notification
-  body, which a phone automation app (MacroDroid, Tasker) can match and
-  act on — putting the send on the device, where it's actually possible,
-  instead of pretending the web app can do it. Off by default: it's
-  clutter for anyone not wiring it up. It has to go in the visible body
-  because automation apps can read a notification's title and text but
-  not the `data` payload the Send action uses.
+- **Ask Buddy (optional, local LLM)**: the Buddy tab can host a chat with a
+  model running locally through Ollama, given the person's own task list as
+  context so it can answer about their actual work rather than in general.
+  Off unless switched on, read-only (it cannot create or change tasks), and
+  degrades to a plain message if Ollama isn't reachable — the same additive,
+  never-blocking contract `sync.js` follows. Stays inside the free-tier and
+  no-cloud rules because the model runs on the user's own machine; the
+  trade-off is that it is a desktop-first feature, since Ollama does not run
+  on the phone and an HTTPS page cannot reach a plain-HTTP LAN address.
 
 ## Non-functional requirements
 

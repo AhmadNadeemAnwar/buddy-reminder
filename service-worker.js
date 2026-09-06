@@ -2,7 +2,7 @@
 // itself opens offline after the first successful load, independent of
 // whether any data can reach the network.
 
-const CACHE_VERSION = "buddy-v30";
+const CACHE_VERSION = "buddy-v32";
 
 // Google Fonts. Cached on first online load so the typography survives
 // offline; if they're never fetched, the CSS falls back to system faces.
@@ -23,7 +23,7 @@ const SHELL_FILES = [
   "js/calendar.js",
   "js/theme.js",
   "js/prefs.js",
-  "js/whatsapp.js",
+  "js/ollama.js",
   "icons/icon-192.png",
   "icons/icon-192-maskable.png",
   "icons/icon-512.png",
@@ -100,15 +100,6 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-
-  // The "Send on WhatsApp" action carries its own link — open WhatsApp
-  // with the message already filled in, rather than the app.
-  const data = event.notification.data;
-  if (event.action === "whatsapp" && data && data.waUrl) {
-    event.waitUntil(self.clients.openWindow(data.waUrl));
-    return;
-  }
-
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {

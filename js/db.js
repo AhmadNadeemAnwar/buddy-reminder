@@ -64,9 +64,6 @@ export const db = {
         dueAt: null,
         hasTime: false,
         recurring: null,
-        // Optional WhatsApp hand-off: { phone, name, text }. Set, it puts a
-        // Send button on the task and on its reminder notification.
-        whatsapp: null,
         createdAt: now,
         completedAt: null,
         parentId: null,

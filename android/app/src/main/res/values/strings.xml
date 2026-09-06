@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Buddy Reminder</string>
+    <string name="title_activity_main">Buddy Reminder</string>
+    <string name="package_name">com.ahmadnadeemanwar.buddyreminder</string>
+    <string name="custom_url_scheme">com.ahmadnadeemanwar.buddyreminder</string>
+</resources>

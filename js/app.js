@@ -2,7 +2,15 @@ import { db } from "./db.js";
 import { computeFlags, messageFor } from "./insights.js";
 import { voiceSupported, createVoiceInput } from "./voice.js";
 import { parseInput } from "./parse.js";
-import { notificationsSupported, requestPermission, pollDueReminders, scheduleTrigger, AUTOMATION_TAG } from "./notify.js";
+import {
+  notificationsSupported,
+  requestPermission,
+  pollDueReminders,
+  scheduleTrigger,
+  cancelTrigger,
+  getPermissionState,
+  isNative,
+} from "./notify.js";
 import { initSync, pushItem, pushDelete } from "./sync.js";
 import { WEEKDAY_LABELS, dateKey, monthMatrix, itemsByDay, isToday } from "./calendar.js";
 import { initTheme, getColorTheme, getMode, setColorTheme, setMode, getFontScale, setFontScale } from "./theme.js";
@@ -13,13 +21,15 @@ import {
   setOwnerName,
   isOnboarded,
   setOnboarded,
-  getCountryCode,
-  setCountryCode,
-  getAutomationPayload,
-  setAutomationPayload,
+  getOllamaEnabled,
+  setOllamaEnabled,
+  getOllamaUrl,
+  setOllamaUrl,
+  getOllamaModel,
+  setOllamaModel,
 } from "./prefs.js";
 import { isSyncEnabled } from "./sync.js";
-import { contactPickerSupported, pickContact, normalizePhone, prettyPhone, waLink } from "./whatsapp.js";
+import { chat as ollamaChat, listModels, buildContext } from "./ollama.js";
 
 const OWNER_NAME = "Ahmad";
 const DAY_MS = 86400000;
@@ -108,37 +118,35 @@ const detailStepsList = document.getElementById("detailStepsList");
 const detailStepInput = document.getElementById("detailStepInput");
 const detailStepAddBtn = document.getElementById("detailStepAddBtn");
 const detailFootnote = document.getElementById("detailFootnote");
-const detailWhatsappRow = document.getElementById("detailWhatsappRow");
-const detailWhatsappValue = document.getElementById("detailWhatsappValue");
-const detailWhatsappSend = document.getElementById("detailWhatsappSend");
-
-// whatsapp editor sheet
-const waOverlay = document.getElementById("waOverlay");
-const waClose = document.getElementById("waClose");
-const waPickBtn = document.getElementById("waPickBtn");
-const waName = document.getElementById("waName");
-const waPhone = document.getElementById("waPhone");
-const waResolved = document.getElementById("waResolved");
-const waText = document.getElementById("waText");
-const waRemove = document.getElementById("waRemove");
-const waSave = document.getElementById("waSave");
-const countryCodeInput = document.getElementById("countryCodeInput");
-
 // settings: notifications/sync toggles + notification preview
 const notifToggleRow = document.getElementById("notifToggleRow");
 const notifToggleSwitch = document.getElementById("notifToggleSwitch");
 const notifToggleHint = document.getElementById("notifToggleHint");
 const syncToggleRow = document.getElementById("syncToggleRow");
 const syncToggleSwitch = document.getElementById("syncToggleSwitch");
-const automationToggleRow = document.getElementById("automationToggleRow");
-const automationToggleSwitch = document.getElementById("automationToggleSwitch");
-const automationToggleHint = document.getElementById("automationToggleHint");
 const lockPreviewDate = document.getElementById("lockPreviewDate");
 const lockPreviewTime = document.getElementById("lockPreviewTime");
 const lockCard = document.getElementById("lockCard");
 const lockCardTitle = document.getElementById("lockCardTitle");
 const lockCardSub = document.getElementById("lockCardSub");
 const lockPreviewEmpty = document.getElementById("lockPreviewEmpty");
+
+// ask buddy (local model chat)
+const chatSection = document.getElementById("chatSection");
+const chatThread = document.getElementById("chatThread");
+const chatStatus = document.getElementById("chatStatus");
+const chatForm = document.getElementById("chatForm");
+const chatInput = document.getElementById("chatInput");
+const chatSend = document.getElementById("chatSend");
+const ollamaToggleRow = document.getElementById("ollamaToggleRow");
+const ollamaToggleSwitch = document.getElementById("ollamaToggleSwitch");
+const ollamaToggleHint = document.getElementById("ollamaToggleHint");
+const ollamaFields = document.getElementById("ollamaFields");
+const ollamaUrlInput = document.getElementById("ollamaUrlInput");
+const ollamaModelInput = document.getElementById("ollamaModelInput");
+const ollamaModelList = document.getElementById("ollamaModelList");
+const ollamaTestBtn = document.getElementById("ollamaTestBtn");
+const ollamaTestResult = document.getElementById("ollamaTestResult");
 
 // toast
 const toast = document.getElementById("toast");
@@ -163,7 +171,6 @@ let editingItemId = null; // task whose reminder the picker is currently editing
 let selectedDate = null;
 let dayCreateOpen = false;
 let detailItemId = null; // task shown full-screen, or null
-let waEditingId = null; // task whose WhatsApp message the sheet is editing
 
 let pendingWhen = { dueAt: null, hasTime: false, intervalDays: null };
 let whenTouched = false;
@@ -177,8 +184,6 @@ const iconPlus =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 4.5v11M4.5 10h11" stroke-linecap="round"/></svg>';
 const iconBell =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3a4 4 0 0 0-4 4c0 3.5-1.2 4.7-1.2 4.7h10.4S14 10.5 14 7a4 4 0 0 0-4-4zM8.6 14.4a1.6 1.6 0 0 0 2.8 0" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const iconChat =
-  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 9.6c0 3.2-3.1 5.8-7 5.8-.8 0-1.6-.1-2.3-.3L3.6 16.4l1.1-2.9C3.6 12.5 3 11.1 3 9.6 3 6.4 6.1 3.8 10 3.8s7 2.6 7 5.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const iconChevron =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 4l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -661,28 +666,12 @@ function renderItemNode(item, childrenMap, today, depth) {
   // squeeze the title into a two-line stack on a narrow screen.
   const sub = subLine(item, childrenMap);
   const pill = depth === 0 ? duePill(item, today) : "";
-  const wa = depth === 0 && item.whatsapp && !item.completedAt ? item.whatsapp : null;
-  if (sub || pill || wa) {
+  if (sub || pill) {
     const meta = document.createElement("div");
     meta.className = "row-meta";
     meta.innerHTML = pill + (sub ? `<span class="row-sub">${sub}</span>` : "");
     const editable = meta.querySelector(".pill-edit");
     if (editable) editable.addEventListener("click", (e) => openReminderEditor(item, e));
-
-    if (wa) {
-      const send = document.createElement("button");
-      send.type = "button";
-      send.className = "row-wa";
-      send.title = "Send on WhatsApp";
-      send.innerHTML = iconChat + "<span></span>";
-      send.querySelector("span").textContent = wa.name || "Send";
-      send.addEventListener("click", (e) => {
-        e.stopPropagation();
-        sendWhatsapp(item);
-      });
-      meta.appendChild(send);
-    }
-
     body.appendChild(meta);
   }
 
@@ -814,10 +803,6 @@ function renderDetail() {
   const when = { dueAt: item.dueAt, hasTime: !!item.hasTime, intervalDays: item.recurring ? item.recurring.intervalDays : null };
   detailReminderValue.textContent = describeWhen(when) || "None";
 
-  const wa = item.whatsapp;
-  detailWhatsappValue.textContent = wa ? wa.name || prettyPhone(wa.phone) || "Ready" : "None";
-  detailWhatsappSend.hidden = !wa;
-
   const childrenMap = buildChildrenMap(allItems);
   const kids = childrenMap.get(item.id) || [];
   detailStepsLabel.textContent = kids.length ? `${kids.filter((k) => k.completedAt).length} of ${kids.length} done` : "";
@@ -913,102 +898,6 @@ detailStepInput.addEventListener("keydown", (e) => {
     commitDetailStep();
   }
 });
-
-// ---------------- whatsapp hand-off ----------------
-// Opening WhatsApp has to happen inside the tap that asked for it —
-// browsers block a window opened from a timer, and that's also the honest
-// design: Buddy gets the message ready, you're still the one sending it.
-function sendWhatsapp(item) {
-  const wa = item && item.whatsapp;
-  if (!wa) return;
-  window.open(waLink(wa.phone, wa.text || item.title), "_blank", "noopener");
-}
-
-function updateWaResolved() {
-  const digits = normalizePhone(waPhone.value, getCountryCode());
-  const typed = waPhone.value.trim();
-  if (!typed) {
-    waResolved.textContent = "No number — WhatsApp will ask who to send to.";
-    waResolved.classList.remove("warn");
-    return;
-  }
-  const needsCode = !getCountryCode() && /^0/.test(typed.replace(/\D/g, ""));
-  waResolved.textContent = needsCode
-    ? `Will open ${prettyPhone(digits)} — set a country code in Settings if that's wrong.`
-    : `Will open ${prettyPhone(digits)}`;
-  waResolved.classList.toggle("warn", needsCode);
-}
-
-function openWaSheet(id) {
-  const item = allItems.find((i) => i.id === id);
-  if (!item) return;
-  waEditingId = id;
-
-  const wa = item.whatsapp || {};
-  waName.value = wa.name || "";
-  waPhone.value = wa.phone ? prettyPhone(wa.phone) : "";
-  waText.value = wa.text || item.title;
-  waPickBtn.hidden = !contactPickerSupported;
-  updateWaResolved();
-
-  waOverlay.hidden = false;
-  requestAnimationFrame(() => waOverlay.classList.add("show"));
-}
-
-function closeWaSheet() {
-  waOverlay.classList.remove("show");
-  setTimeout(() => {
-    waOverlay.hidden = true;
-  }, 180);
-  waEditingId = null;
-}
-
-async function saveWa(payload) {
-  const id = waEditingId;
-  if (!id) return;
-  closeWaSheet();
-  await saveUpdate(id, { whatsapp: payload });
-  // the pending trigger was built without this payload — rebuild it so the
-  // notification carries the Send action
-  const updated = allItems.find((i) => i.id === id);
-  if (updated) scheduleTrigger(updated);
-  showToast(payload ? "WhatsApp message saved" : "WhatsApp message removed");
-}
-
-detailWhatsappRow.addEventListener("click", () => {
-  if (detailItemId) openWaSheet(detailItemId);
-});
-detailWhatsappSend.addEventListener("click", () => {
-  const item = allItems.find((i) => i.id === detailItemId);
-  if (item) sendWhatsapp(item);
-});
-
-waClose.addEventListener("click", closeWaSheet);
-waOverlay.addEventListener("click", (e) => {
-  if (e.target === waOverlay) closeWaSheet();
-});
-waPhone.addEventListener("input", updateWaResolved);
-
-waPickBtn.addEventListener("click", async () => {
-  const picked = await pickContact();
-  if (!picked) return;
-  if (picked.name) waName.value = picked.name;
-  if (picked.phone) waPhone.value = picked.phone;
-  updateWaResolved();
-});
-
-waSave.addEventListener("click", () => {
-  const phone = normalizePhone(waPhone.value, getCountryCode());
-  const text = waText.value.trim();
-  const name = waName.value.trim();
-  if (!phone && !text) {
-    saveWa(null); // nothing to hand off
-    return;
-  }
-  saveWa({ phone, name, text });
-});
-
-waRemove.addEventListener("click", () => saveWa(null));
 
 function render() {
   const today = new Date();
@@ -1138,6 +1027,119 @@ function renderInsight(today) {
     insightBody.appendChild(card);
   });
 }
+
+// ---------------- ask buddy (local model chat) ----------------
+// Only ever reached from the Buddy tab, and only when switched on in
+// Settings. Everything else in the app works exactly the same whether or
+// not Ollama is running.
+let chatHistory = []; // {role, content} — the conversation, without the system context
+let chatBusy = false;
+
+function renderChatSection() {
+  const on = getOllamaEnabled();
+  chatSection.hidden = !on;
+  if (!on) return;
+  if (!getOllamaModel()) {
+    setChatStatus("Pick a model in Settings to start asking.", true);
+    chatSend.disabled = true;
+  } else if (!chatBusy) {
+    chatSend.disabled = false;
+    if (chatStatus.textContent.startsWith("Pick a model")) setChatStatus("");
+  }
+}
+
+function setChatStatus(text, warn) {
+  chatStatus.textContent = text;
+  chatStatus.hidden = !text;
+  chatStatus.classList.toggle("warn", !!warn);
+}
+
+function appendChatMessage(role, text) {
+  const row = document.createElement("div");
+  row.className = "chat-msg" + (role === "user" ? " from-me" : "");
+
+  if (role !== "user") {
+    const avatar = document.createElement("div");
+    avatar.className = "nudge-avatar";
+    avatar.setAttribute("aria-hidden", "true");
+    row.appendChild(avatar);
+  }
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-msg-bubble";
+  bubble.textContent = text;
+  row.appendChild(bubble);
+
+  chatThread.appendChild(row);
+  row.scrollIntoView({ block: "nearest" });
+  return bubble;
+}
+
+async function sendChatMessage(text) {
+  if (chatBusy) return;
+  const model = getOllamaModel();
+  if (!model) {
+    setChatStatus("Pick a model in Settings first.", true);
+    return;
+  }
+
+  chatBusy = true;
+  chatSend.disabled = true;
+  setChatStatus("");
+
+  const askedRow = appendChatMessage("user", text).parentElement;
+  chatHistory.push({ role: "user", content: text });
+
+  const bubble = appendChatMessage("assistant", "thinking…");
+  bubble.classList.add("thinking");
+  let started = false;
+
+  // Rebuilt every turn so the model sees the task list as it is now,
+  // not as it was when the conversation started.
+  const system = buildContext(allItems, new Date(), { dayLabel, describeWhen });
+
+  try {
+    const reply = await ollamaChat({
+      url: getOllamaUrl(),
+      model,
+      messages: [{ role: "system", content: system }, ...chatHistory],
+      onToken(piece) {
+        if (!started) {
+          started = true;
+          bubble.classList.remove("thinking");
+          bubble.textContent = "";
+        }
+        bubble.textContent += piece;
+        bubble.scrollIntoView({ block: "nearest" });
+      },
+    });
+    chatHistory.push({ role: "assistant", content: reply });
+  } catch (e) {
+    // Roll the whole exchange back — thread and history together, so they
+    // can't drift apart — and hand the question back for an easy retry.
+    bubble.parentElement.remove();
+    askedRow.remove();
+    chatHistory.pop();
+    if (!chatInput.value) chatInput.value = text;
+    setChatStatus(
+      e && e.name === "TypeError"
+        ? `Couldn't reach Ollama at ${getOllamaUrl()}. Check it's running, and that OLLAMA_ORIGINS allows ${location.origin}.`
+        : `Ollama couldn't answer: ${e.message}`,
+      true
+    );
+  } finally {
+    chatBusy = false;
+    chatSend.disabled = false;
+  }
+}
+
+chatForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  if (!text) return;
+  chatInput.value = "";
+  sendChatMessage(text);
+});
 
 // ---------------- calendar ----------------
 function renderCalendarView() {
@@ -1382,7 +1384,20 @@ async function loadAll() {
 
 async function saveUpdate(id, patch) {
   const updated = await db.update(id, patch);
-  if (updated) pushItem(updated);
+  if (updated) {
+    pushItem(updated);
+    // Single choke point every edit path (writeWhen, completeItem,
+    // recreateItem, ...) already funnels through, so this is the one place
+    // that needs to keep a native alarm in sync with what actually changed:
+    // reschedule to a new dueAt, or cancel if there's no longer a live one
+    // to fire. `completedAt && !recurring` is the same "truly finished"
+    // test used throughout this file (bucketOf, duePill, ...) — a
+    // recurring task's completedAt marks its last run, not the end of it,
+    // and its dueAt has already moved to the next occurrence.
+    const trulyDone = updated.completedAt && !updated.recurring;
+    if (updated.dueAt && !trulyDone) scheduleTrigger(updated);
+    else cancelTrigger(id);
+  }
   await loadAll();
 }
 
@@ -1419,6 +1434,7 @@ async function removeItem(id) {
   for (const did of [id, ...descendantIds(id, childrenMap)]) {
     await db.remove(did);
     pushDelete(did);
+    cancelTrigger(did); // a deleted task shouldn't still buzz at its old time
   }
   await loadAll();
 }
@@ -1589,6 +1605,7 @@ function setTab(next) {
     el.hidden = k !== tab;
   });
   todayHero.hidden = tab !== "today";
+  if (tab === "buddy") renderChatSection();
   if (tab === "settings") {
     reflectThemeButtons();
     reflectToggles();
@@ -1605,7 +1622,6 @@ dayModalOverlay.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!whenPicker.hidden) toggleWhenPicker(false);
-  else if (!waOverlay.hidden) closeWaSheet();
   else if (!dayModalOverlay.hidden) closeDayModal();
   else if (!composerOverlay.hidden) closeComposer();
   else if (!detailScreen.hidden) closeDetail();
@@ -1638,46 +1654,89 @@ function reflectThemeButtons() {
   voiceAutoHint.textContent = VOICE_AUTO_HINTS[voiceAuto];
 }
 
-// A browser notification permission, once granted, can't be revoked from
-// JS — only from the browser's own site settings — so this toggle can only
-// ever turn itself on; "off" just means "not asked yet".
+// A notification permission, once granted, can't be revoked from JS — only
+// from the OS/browser's own settings — so this toggle can only ever turn
+// itself on; "off" just means "not asked yet".
 function reflectToggles() {
-  const granted = notificationsSupported && Notification.permission === "granted";
+  const granted = notificationsSupported && getPermissionState() === "granted";
   notifToggleSwitch.classList.toggle("on", granted);
   notifToggleHint.textContent = !notificationsSupported
-    ? "Not supported in this browser."
+    ? "Not supported here."
     : granted
-    ? "On — change this in your browser's site settings to turn off."
+    ? isNative
+      ? "On — change this in Android's app notification settings to turn off."
+      : "On — change this in your browser's site settings to turn off."
+    : isNative
+    ? "Buddy will ask Android for permission."
     : "Buddy will ask your browser for permission.";
 
   syncToggleSwitch.classList.toggle("on", isSyncEnabled());
 
-  const automationOn = getAutomationPayload();
-  automationToggleSwitch.classList.toggle("on", automationOn);
-  automationToggleHint.textContent = automationOn
-    ? `WhatsApp reminders carry a ${AUTOMATION_TAG} link an automation app can act on.`
-    : "Adds a link to WhatsApp reminders so MacroDroid or Tasker can send them for you.";
-
-  countryCodeInput.value = getCountryCode();
+  const ollamaOn = getOllamaEnabled();
+  ollamaToggleSwitch.classList.toggle("on", ollamaOn);
+  ollamaToggleHint.textContent = ollamaOn
+    ? "A chat box appears on the Buddy tab."
+    : "Ask a model running on your own computer about your tasks.";
+  ollamaFields.hidden = !ollamaOn;
+  ollamaUrlInput.value = getOllamaUrl();
+  ollamaModelInput.value = getOllamaModel();
 }
 
-automationToggleRow.addEventListener("click", () => {
-  setAutomationPayload(!getAutomationPayload());
+ollamaToggleRow.addEventListener("click", () => {
+  setOllamaEnabled(!getOllamaEnabled());
   reflectToggles();
-  // already-scheduled triggers carry the old body — rebuild the affected
-  // ones so the change reaches reminders that are already pending
-  allItems.filter((it) => it.whatsapp && it.dueAt).forEach((it) => scheduleTrigger(it));
+  renderChatSection();
 });
 
-countryCodeInput.addEventListener("change", () => {
-  setCountryCode(countryCodeInput.value);
-  countryCodeInput.value = getCountryCode();
+ollamaUrlInput.addEventListener("change", () => {
+  setOllamaUrl(ollamaUrlInput.value);
+  ollamaUrlInput.value = getOllamaUrl();
+});
+
+ollamaModelInput.addEventListener("change", () => {
+  setOllamaModel(ollamaModelInput.value);
+  renderChatSection();
+});
+
+ollamaTestBtn.addEventListener("click", async () => {
+  setOllamaUrl(ollamaUrlInput.value);
+  ollamaUrlInput.value = getOllamaUrl();
+  ollamaTestResult.textContent = "Checking…";
+  ollamaTestResult.className = "settings-hint";
+  try {
+    const models = await listModels(getOllamaUrl());
+    ollamaModelList.innerHTML = "";
+    models.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m;
+      ollamaModelList.appendChild(opt);
+    });
+    if (!models.length) {
+      ollamaTestResult.textContent = "Connected, but no models installed. Try `ollama pull llama3.2`.";
+      ollamaTestResult.className = "settings-hint warn";
+      return;
+    }
+    // nothing chosen yet — take the first installed model as the default
+    if (!getOllamaModel()) {
+      setOllamaModel(models[0]);
+      ollamaModelInput.value = models[0];
+      renderChatSection();
+    }
+    ollamaTestResult.textContent = `Connected. ${models.length} model${models.length === 1 ? "" : "s"}: ${models.join(", ")}`;
+    ollamaTestResult.className = "settings-hint ok";
+  } catch (e) {
+    ollamaTestResult.textContent =
+      e && e.name === "TypeError"
+        ? `No answer from ${getOllamaUrl()}. Check Ollama is running and that OLLAMA_ORIGINS allows ${location.origin}.`
+        : `Ollama replied with an error: ${e.message}`;
+    ollamaTestResult.className = "settings-hint warn";
+  }
 });
 
 notifToggleRow.addEventListener("click", async () => {
   if (!notificationsSupported) return;
-  if (Notification.permission === "granted") {
-    showToast("Already on — turn off from your browser's site settings");
+  if (getPermissionState() === "granted") {
+    showToast(isNative ? "Already on — turn off from Android's app settings" : "Already on — turn off from your browser's site settings");
     return;
   }
   await requestPermission();
@@ -1809,8 +1868,8 @@ function refreshBell() {
     notifyEnable.hidden = true;
     return;
   }
-  notifyPrompt.classList.toggle("show", Notification.permission === "default");
-  notifyEnable.title = Notification.permission === "granted" ? "Notifications are on" : "Turn on notifications";
+  notifyPrompt.classList.toggle("show", getPermissionState() === "default");
+  notifyEnable.title = getPermissionState() === "granted" ? "Notifications are on" : "Turn on notifications";
 }
 notifyEnable.addEventListener("click", async () => {
   await requestPermission();
@@ -1827,7 +1886,14 @@ window.addEventListener("offline", updateOnlineStatus);
 updateOnlineStatus();
 
 // ---------------- service worker ----------------
-if ("serviceWorker" in navigator) {
+// Skipped inside the native Android app: asset requests there go through
+// Capacitor's own local-server interception rather than the path a
+// registered SW expects (registration is unreliable there), and both of
+// its jobs are moot on native anyway — the WebView already has every asset
+// bundled locally, and @capacitor/local-notifications now handles the
+// background-notification job the experimental TimestampTrigger path was
+// standing in for.
+if (!isNative && "serviceWorker" in navigator) {
   // If a NEW worker takes over a page that already had one, the page is now
   // running against older code — reload once so what's on screen matches.
   const hadController = !!navigator.serviceWorker.controller;

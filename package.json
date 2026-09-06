@@ -1,0 +1,22 @@
+{
+  "name": "buddy-reminder",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Buddy Reminder — native Android wrapper (Capacitor) around the existing PWA in this same folder.",
+  "type": "module",
+  "scripts": {
+    "build:www": "node scripts/build-www.mjs",
+    "sync:android": "npm run build:www && npx cap sync android",
+    "open:android": "npx cap open android",
+    "run:android": "npm run sync:android && npx cap run android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/local-notifications": "^8.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.1"
+  }
+}

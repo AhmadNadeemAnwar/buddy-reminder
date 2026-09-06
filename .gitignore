@@ -7,3 +7,18 @@ js/firebase-config.js
 Thumbs.db
 .vscode/
 .idea/
+
+# Capacitor / native Android wrapper — see README's "Android app" section.
+# android/ itself IS committed (hand-edited native config lives there);
+# only build output, local machine paths, and the disposable web-asset
+# copy are ignored. cap add android also writes its own android/.gitignore
+# with these same entries — this is a top-level mirror in case that's ever
+# regenerated.
+node_modules/
+www/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/captures/
+android/.cxx/

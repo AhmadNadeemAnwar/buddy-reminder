@@ -89,6 +89,19 @@
       <p class="panel-sub">Worked out on your phone from your own repeat intervals. Nothing leaves the device.</p>
       <div class="stats-row" id="statsRow"></div>
       <aside class="nudges" id="insightBody"></aside>
+
+      <!-- Optional: talk to a model running locally via Ollama -->
+      <section class="chat" id="chatSection" hidden>
+        <p class="settings-label">Ask Buddy</p>
+        <div class="chat-thread" id="chatThread"></div>
+        <p class="chat-status" id="chatStatus" hidden></p>
+        <form class="chat-form" id="chatForm">
+          <input type="text" id="chatInput" placeholder="Ask about your tasks…" autocomplete="off" />
+          <button type="submit" class="chat-send" id="chatSend" aria-label="Send">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3.5 10h13M11 4.5l5.5 5.5L11 15.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+      </section>
     </section>
 
     <!-- ------------- Settings (bridged, unrestyled this stage) ------------- -->
@@ -158,23 +171,34 @@
             </span>
             <span class="toggle-switch" id="syncToggleSwitch"><span class="toggle-knob"></span></span>
           </button>
-          <button type="button" class="toggle-row" id="automationToggleRow">
-            <span class="toggle-text">
-              <span class="toggle-label">Automation payload</span>
-              <span class="toggle-hint" id="automationToggleHint"></span>
-            </span>
-            <span class="toggle-switch" id="automationToggleSwitch"><span class="toggle-knob"></span></span>
-          </button>
         </div>
       </div>
 
       <div class="settings-section">
-        <p class="settings-label">WhatsApp country code</p>
-        <div class="cc-row">
-          <span class="cc-plus">+</span>
-          <input type="tel" class="cc-input" id="countryCodeInput" placeholder="92" inputmode="numeric" autocomplete="off" />
+        <p class="settings-label">Ask Buddy (local model)</p>
+        <div class="toggle-card">
+          <button type="button" class="toggle-row" id="ollamaToggleRow">
+            <span class="toggle-text">
+              <span class="toggle-label">Chat on the Buddy tab</span>
+              <span class="toggle-hint" id="ollamaToggleHint"></span>
+            </span>
+            <span class="toggle-switch" id="ollamaToggleSwitch"><span class="toggle-knob"></span></span>
+          </button>
         </div>
-        <p class="settings-hint">Turns a number saved as 0300 1234567 into the full international one WhatsApp needs.</p>
+        <div class="ollama-fields" id="ollamaFields" hidden>
+          <label class="ollama-field">
+            <span>Server</span>
+            <input type="url" id="ollamaUrlInput" placeholder="http://localhost:11434" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="ollama-field">
+            <span>Model</span>
+            <input type="text" id="ollamaModelInput" list="ollamaModelList" placeholder="e.g. llama3.2" autocomplete="off" spellcheck="false" />
+            <datalist id="ollamaModelList"></datalist>
+          </label>
+          <button type="button" class="ollama-test" id="ollamaTestBtn">Test connection</button>
+          <p class="settings-hint" id="ollamaTestResult"></p>
+        </div>
+        <p class="settings-hint">Runs on your own computer through Ollama — the model and your tasks never leave your network. Nothing is contacted unless this is on.</p>
       </div>
 
       <div class="settings-section">
@@ -274,45 +298,6 @@
   </div>
 </div>
 
-<!-- Who to message, and what to say. Saved on the task; sent only when tapped. -->
-<div class="modal-overlay" id="waOverlay" hidden>
-  <div class="modal sheet" id="waSheet" role="dialog" aria-modal="true" aria-label="WhatsApp message">
-    <div class="sheet-handle"></div>
-    <div class="modal-head">
-      <h3 class="sheet-title">WhatsApp message</h3>
-      <button type="button" class="modal-close" id="waClose" aria-label="Close">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/></svg>
-      </button>
-    </div>
-
-    <button type="button" class="wa-pick-btn" id="waPickBtn" hidden>
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="7" r="3.2"/><path d="M4 16.4c.6-2.8 3-4.4 6-4.4s5.4 1.6 6 4.4" stroke-linecap="round"/></svg>
-      <span>Choose from contacts</span>
-    </button>
-
-    <div class="wa-field">
-      <label for="waName">Who</label>
-      <input type="text" id="waName" placeholder="Name (optional)" autocomplete="off" />
-    </div>
-
-    <div class="wa-field">
-      <label for="waPhone">Number</label>
-      <input type="tel" id="waPhone" placeholder="e.g. 0300 1234567" autocomplete="off" inputmode="tel" />
-      <p class="wa-resolved" id="waResolved"></p>
-    </div>
-
-    <div class="wa-field">
-      <label for="waText">Message</label>
-      <textarea id="waText" rows="3" placeholder="What should Buddy have ready to send?"></textarea>
-    </div>
-
-    <div class="wa-sheet-actions">
-      <button type="button" class="wa-remove-btn" id="waRemove">Remove</button>
-      <button type="button" class="save-task-btn" id="waSave">Save</button>
-    </div>
-  </div>
-</div>
-
 <div class="voice-overlay" id="voiceOverlay" hidden>
   <div class="voice-inner">
     <div class="voice-orb"><div class="buddy voice-buddy"></div></div>
@@ -353,17 +338,7 @@
         <span class="detail-field-label">Reminder</span>
         <span class="detail-field-value" id="detailReminderValue">None</span>
       </button>
-      <button type="button" class="detail-field" id="detailWhatsappRow">
-        <span class="detail-field-icon detail-field-icon-wa"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 9.6c0 3.2-3.1 5.8-7 5.8-.8 0-1.6-.1-2.3-.3L3.6 16.4l1.1-2.9C3.6 12.5 3 11.1 3 9.6 3 6.4 6.1 3.8 10 3.8s7 2.6 7 5.8z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="detail-field-label">WhatsApp</span>
-        <span class="detail-field-value" id="detailWhatsappValue">None</span>
-      </button>
     </div>
-
-    <button type="button" class="wa-send-btn" id="detailWhatsappSend" hidden>
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 9.6c0 3.2-3.1 5.8-7 5.8-.8 0-1.6-.1-2.3-.3L3.6 16.4l1.1-2.9C3.6 12.5 3 11.1 3 9.6 3 6.4 6.1 3.8 10 3.8s7 2.6 7 5.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>Send on WhatsApp</span>
-    </button>
 
     <div class="detail-steps-section">
       <div class="detail-steps-head">

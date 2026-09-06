@@ -2,8 +2,7 @@
 
 A lightweight, offline-first task & reminder PWA. Add things by voice or
 text, break a task into subtasks, see everything on one clean list or a
-month calendar, have a WhatsApp message ready to send the moment a
-reminder fires, and let Buddy notice when a recurring habit slipped —
+month calendar, and let Buddy notice when a recurring habit slipped —
 without any server, account, or paid tier required.
 
 ## What's here
@@ -22,9 +21,9 @@ buddy-reminder/
     calendar.js            pure month-grid helpers for the calendar view
     voice.js               Web Speech API wrapper
     notify.js               local notifications for due reminders
-    whatsapp.js             contact picker + wa.me link building
     theme.js                colour theme, light/dark, text size
-    prefs.js                small settings (name, voice mode, country code)
+    prefs.js                small settings (name, voice capture mode, Ollama)
+    ollama.js               optional local-LLM chat — no-op until enabled
     sync.js                 optional Firebase sync — no-op until configured
     firebase-config.example.js
   icons/                  app icons (generated, buddy-blob mark)
@@ -58,75 +57,13 @@ calendar.
   date without leaving the calendar.
 - **Buddy** — what Buddy has noticed: today's progress and how many habits
   are on track, plus any nudges about repeating tasks that have drifted.
+  Optionally a chat box too, if you've pointed it at a local model (see
+  *Ask Buddy* below).
 - **Settings** — theme, light/dark, text size, voice behaviour,
-  notifications, and the WhatsApp country code.
+  notifications, sync, and the local-model chat.
 
 Everything runs from static files. No build step, no framework, no backend
 of its own.
-
-### Sending a WhatsApp message
-
-A task can carry a message — who it's for and what it says. When its
-reminder fires you get a **Send on WhatsApp** button on the notification
-itself, and the same button sits on the task row and its detail screen.
-Tapping it opens WhatsApp with the message already typed; you press send.
-
-**Buddy doesn't send it for you, on purpose.** There's no free way to: the
-official WhatsApp Business API costs money and needs a server behind it,
-and the unofficial bridges break WhatsApp's terms and can get your number
-banned. Neither belongs in an app that promises to stay free and local, so
-Buddy does the part it can do well — having the right message ready for the
-right person at the right moment — and leaves the send to you.
-
-Pick the recipient straight from your phone's contacts (Chrome on Android;
-each pick is its own one-off permission, Buddy never holds your address
-book). Anywhere else, type the number — or leave it blank and let WhatsApp
-ask who to send to. Set your **country code** in Settings so numbers saved
-the local way (`0300 1234567`) resolve to the international form WhatsApp
-links need.
-
-The notification's action button needs Android; iOS doesn't support action
-buttons on web notifications, so there you tap the notification to open
-Buddy and send from the task.
-
-#### Truly automatic sending (Android, optional)
-
-If you want the message to go out with no tap at all, that has to happen on
-the phone — no web app can send WhatsApp for you (see the note above). Turn
-on **Settings → Automation payload** and every WhatsApp reminder's
-notification gains a second line:
-
-```
-Call the plumber
-[BUDDY-WA] https://wa.me/923001234567?text=Are%20you%20free%20this%20afternoon%3F
-```
-
-That's a machine-readable handle an automation app can act on. It has to be
-in the visible text — an automation app can read a notification's title and
-body, but not the hidden data the Send button uses. Leave the setting off
-and notifications stay clean; it's only worth turning on if you're wiring
-this up.
-
-**MacroDroid recipe** (the free tier covers it):
-
-1. **Trigger** → *Notification Received*. Application: the browser Buddy
-   runs in (Chrome), or Buddy itself if you installed it to the home
-   screen. Set *Text content contains* → `[BUDDY-WA]`.
-2. **Action** → *Set Variable* (string, e.g. `waUrl`), value from the
-   notification text with a regex of `\[BUDDY-WA\]\s+(\S+)` — capture
-   group 1 is the link.
-3. **Action** → *Open Website / Launch Intent* with `[lv=waUrl]`. WhatsApp
-   opens with the message already typed.
-4. **Action** → *UI Interaction → Click* the send button, with a short
-   *Wait* before it so WhatsApp has finished opening.
-
-Steps 1–2 need MacroDroid's notification access; step 4 needs its
-accessibility permission. Tasker does the same job if you already own it.
-
-Fair warning: bulk automated messaging is against WhatsApp's terms.
-Device-level automation like this looks like an ordinary message from the
-real app — unlike a `whatsapp-web.js` bridge, which is a known ban vector —
-but keep it to your own genuine reminders, not blasts.
 
 ## Run it locally
 
@@ -164,6 +101,48 @@ so everything works without deploying:
 **Quick look only — same Wi-Fi.** `http://<your-lan-ip>:8833`. Needs an
 inbound firewall rule for the port, and gets you layout checking only, not
 offline or install.
+
+## Android app (Capacitor) — a real app, not a browser tab
+
+The PWA above is the whole app running inside Chrome. This is the same code
+wrapped as an actual installed Android app via
+[Capacitor](https://capacitorjs.com), which fixes the one thing the PWA
+can't: real, OS-scheduled notifications. `@capacitor/local-notifications`
+sets an exact Android alarm for every reminder, so it fires at its exact
+time with the app fully closed — no experimental browser API, no best-effort.
+
+This targets **your own device, sideloaded for free** — no Play Store, no
+developer account, nothing that costs money. iOS isn't set up yet (it needs
+a Mac to build).
+
+**One-time setup:**
+1. Install [Android Studio](https://developer.android.com/studio) — its
+   SDK Manager brings the JDK, Android SDK, and `adb` together in one step.
+2. From `buddy-reminder/`: `npm install`.
+
+**Every time you want the app on your phone with the latest code:**
+```bash
+npm run sync:android    # rebuilds www/ from the real source, copies it into android/
+npm run open:android    # opens the project in Android Studio
+```
+Then in Android Studio: connect your phone by USB with Developer Options →
+USB debugging on, pick it as the run target, and click **Run**. That
+installs a debug-signed APK directly — no store, no fee.
+
+**What's different from the web build:** the app's own source (`index.html`,
+`css/`, `js/`, etc.) is untouched and still what GitHub Pages serves —
+`www/` is just a disposable, gitignored copy `npm run sync:android` builds
+for Capacitor from that same source (see `scripts/build-www.mjs`). The
+service worker isn't registered inside the native app (unreliable in a
+Capacitor WebView, and redundant once local notifications take over its
+job); `notify.js` detects the native app at runtime and switches to the real
+scheduler automatically — nothing to configure.
+
+**If you use [Ask Buddy](#optional-ask-buddy-local-model-via-ollama) from
+the native app**, its origin is `https://localhost` — different from the web
+build's `http://localhost:8833` (different scheme *and* port both count),
+so it needs its own entry in `OLLAMA_ORIGINS` alongside that one, not instead
+of it: `setx OLLAMA_ORIGINS "http://localhost:8833,https://localhost"`.
 
 ## Deploy for free — GitHub Pages
 
@@ -210,6 +189,42 @@ the app regardless of notification support. Android Chrome has the full
 picture: foreground polling always, plus best-effort background triggers
 when the app was opened recently enough for the OS not to have killed its
 service worker.
+
+## Optional: ask Buddy (local model via Ollama)
+
+Off by default. Switch it on and the **Buddy** tab gains a chat box that can
+answer questions about your own tasks — "what did I miss this week?",
+"what's on for Thursday?" — using a model running on your own computer via
+[Ollama](https://ollama.com). Nothing goes to a cloud service, there's no
+API key and no bill. It can currently only *read* your tasks; it won't
+create or complete anything.
+
+1. Install Ollama and pull a model:
+   ```bash
+   ollama pull llama3.2
+   ```
+2. **Let the browser talk to it.** Ollama rejects web origins it wasn't told
+   about, and this is the step that catches everyone out. Set
+   `OLLAMA_ORIGINS` to wherever Buddy is served from, then restart Ollama:
+   ```bash
+   # Windows (PowerShell), then restart Ollama from the tray
+   setx OLLAMA_ORIGINS "http://localhost:8833"
+   ```
+   Use your Pages URL instead (e.g. `https://you.github.io`) if you're
+   running the deployed copy. Comma-separate to allow more than one.
+3. In Buddy: **Settings → Ask Buddy** → switch on → **Test connection**. It
+   lists your installed models and picks one; change it if you'd rather use
+   another.
+
+If Ollama isn't reachable, the chat says so plainly and the rest of the app
+carries on untouched — same rule as sync.
+
+**On your phone this is harder.** Ollama runs on your computer, not the
+handset, and a Buddy served over HTTPS can't call a plain `http://` address
+on your LAN — browsers block that as mixed content. To use it from the
+phone you'd need an HTTPS tunnel to your machine (Tailscale or Cloudflare
+Tunnel, both free), then point the Server field at that address. On the same
+computer that runs Ollama, it just works.
 
 ## Optional: sync across devices (free tier only)
 

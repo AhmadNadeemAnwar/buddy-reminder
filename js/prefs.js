@@ -56,32 +56,42 @@ export function setOnboarded() {
   persist(ONBOARDED_KEY, true);
 }
 
-// Turns a number saved the local way ("0300 1234567") into the full
-// international one WhatsApp links require. Empty until it's set.
-const COUNTRY_CODE_KEY = "buddy-country-code";
+// Optional local-LLM chat through Ollama. Off unless switched on, and even
+// then only reached when you open the Buddy tab — nothing here runs in the
+// background or on startup.
+const OLLAMA_ON_KEY = "buddy-ollama-enabled";
+const OLLAMA_URL_KEY = "buddy-ollama-url";
+const OLLAMA_MODEL_KEY = "buddy-ollama-model";
 
-export function getCountryCode() {
+function readString(key, fallback) {
   try {
-    return localStorage.getItem(COUNTRY_CODE_KEY) || "";
+    return localStorage.getItem(key) || fallback;
   } catch (e) {
-    return "";
+    return fallback;
   }
 }
 
-export function setCountryCode(code) {
-  persist(COUNTRY_CODE_KEY, String(code).replace(/\D/g, ""));
+export function getOllamaEnabled() {
+  return readBool(OLLAMA_ON_KEY, false);
 }
 
-// Appends a machine-readable wa.me link to WhatsApp reminders so a phone
-// automation app (MacroDroid, Tasker) can pick it up and do the send
-// itself. Off by default — it's clutter in the notification for anyone not
-// wiring that up.
-const AUTOMATION_KEY = "buddy-automation-payload";
-
-export function getAutomationPayload() {
-  return readBool(AUTOMATION_KEY, false);
+export function setOllamaEnabled(value) {
+  persist(OLLAMA_ON_KEY, !!value);
 }
 
-export function setAutomationPayload(value) {
-  persist(AUTOMATION_KEY, !!value);
+export function getOllamaUrl() {
+  return readString(OLLAMA_URL_KEY, "http://localhost:11434");
 }
+
+export function setOllamaUrl(url) {
+  persist(OLLAMA_URL_KEY, String(url).trim().replace(/\/+$/, ""));
+}
+
+export function getOllamaModel() {
+  return readString(OLLAMA_MODEL_KEY, "");
+}
+
+export function setOllamaModel(model) {
+  persist(OLLAMA_MODEL_KEY, String(model).trim());
+}
+

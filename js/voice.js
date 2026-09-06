@@ -16,85 +16,162 @@ const isNative = !!(
   window.Capacitor.isNativePlatform()
 );
 
-// Chrome's own end-of-speech cutoff (what `continuous = false` relies on)
-// is undocumented, not configurable, and noticeably shorter than a natural
-// mid-sentence pause — it was ending the listen before people finished a
-// sentence. `continuous = true` turns that built-in cutoff off entirely;
-// we do our own silence detection on top of it instead, so the pause
-// allowance is something this app actually controls. Bump this if it's
-// still cutting people off, or lower it if it feels laggy to end.
+// A listen ends when the speaker says it ends — they tap Stop — and not
+// before. Nothing here guesses at whether a pause means "finished": people
+// stop to think mid-sentence, and being cut off there is worse than holding
+// the mic open a few seconds too long.
 //
-// None of that holds in Android's WebView, which ignores `continuous`
-// outright and endpoints on its own (measured: it stops ~4.4s into a silent
-// listen). There our timer can only ever cut someone off *earlier* than the
-// platform would — at 2.2s from the mic opening, mid-sentence — so on
-// native we stay out of the way and let the recognizer decide when they're
-// done.
-const SILENCE_MS = 2200;
+// The engines won't do that on their own. Chrome ends a listen on its own
+// undocumented, unconfigurable end-of-speech cutoff, and Android's WebView
+// is stricter still — it ignores `continuous` outright and aborts itself
+// after roughly four seconds of quiet (measured on-device: start at 16ms,
+// audiostart at 127ms, audioend + error:aborted + end at 4393ms). So on
+// both, a run ending by itself is treated as an interruption rather than a
+// result: we fold in whatever it heard and immediately listen again, which
+// is what makes one continuous session out of the engine's short runs.
+//
+// The only backstop is a hard cap, so a mic left open by accident can't
+// stay open indefinitely.
+const MAX_SESSION_MS = 120000;
+
+// A restart can't be issued from inside the `end` handler — the recognizer
+// is still winding down and throws InvalidStateError. Waiting a tick and
+// retrying is the standard way around it.
+const RESTART_DELAY_MS = 120;
 
 export function createVoiceInput({ onResult, onStart, onEnd, onError }) {
   if (!Recognition) return null;
 
   const recognition = new Recognition();
-  recognition.continuous = !isNative;
+  // Worth asking for even on native, where it's ignored: on Chrome it's
+  // what stops the engine ending the run at its own cutoff.
+  recognition.continuous = true;
   recognition.interimResults = true;
   recognition.lang = navigator.language || "en-US";
 
-  // Whether this listen produced any words yet — see onerror.
+  // Text carried over from earlier runs in this session. Each run reports
+  // only its own results, so without this every restart would wipe out what
+  // the speaker had already said.
+  let settled = "";
+  let current = "";
+  let listening = false; // is a session open (as opposed to a single run)
   let heardAnything = false;
+  let capTimer = null;
+  let restartTimer = null;
+  let ended = false;
+  // A run that ends immediately having heard nothing means the engine isn't
+  // actually working (mic grabbed by another app, service unavailable).
+  // Restarting into that forever would hold the mic and drain the battery
+  // for the full two minutes, so give up after a few.
+  let runStartedAt = 0;
+  let deadRuns = 0;
+  const DEAD_RUN_MS = 400;
+  const MAX_DEAD_RUNS = 5;
 
-  let silenceTimer = null;
-  function armSilenceTimer() {
-    if (isNative) return; // the platform recognizer endpoints for us
-    clearTimeout(silenceTimer);
-    // Stopping (not aborting) finalizes whatever's been heard so far and
-    // fires the normal onresult/onend sequence, same as Chrome's own
-    // cutoff used to — nothing downstream needs to know this was us.
-    silenceTimer = setTimeout(() => {
-      try {
-        recognition.stop();
-      } catch (e) {
-        /* already stopped */
-      }
-    }, SILENCE_MS);
+  function fullText() {
+    return (settled + " " + current).trim();
   }
-  function clearSilenceTimer() {
-    clearTimeout(silenceTimer);
-    silenceTimer = null;
+
+  function clearTimers() {
+    clearTimeout(capTimer);
+    clearTimeout(restartTimer);
+    capTimer = null;
+    restartTimer = null;
+  }
+
+  function finish() {
+    if (ended) return; // `end` can arrive after we've already closed out
+    ended = true;
+    listening = false;
+    clearTimers();
+    onEnd && onEnd();
   }
 
   recognition.onstart = () => {
-    heardAnything = false;
-    armSilenceTimer(); // also covers someone taking a moment before they start talking
-    onStart && onStart();
+    // Only the first run of a session is a "start" as far as the UI is
+    // concerned — the restarts in between are invisible to the speaker.
+    runStartedAt = Date.now();
+    if (!listening) {
+      listening = true;
+      ended = false;
+      settled = "";
+      current = "";
+      heardAnything = false;
+      deadRuns = 0;
+      clearTimeout(capTimer);
+      capTimer = setTimeout(() => stopSession(), MAX_SESSION_MS);
+      onStart && onStart();
+    }
   };
-  recognition.onend = () => {
-    clearSilenceTimer();
-    onEnd && onEnd();
-  };
+
   recognition.onresult = (event) => {
-    armSilenceTimer(); // heard something — push the "are they done" clock back
     let text = "";
     for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
-    if (text.trim()) heardAnything = true;
-    onResult && onResult(text);
+    current = text;
+    if (fullText()) heardAnything = true;
+    onResult && onResult(fullText());
   };
+
+  recognition.onend = () => {
+    if (!listening) return finish();
+
+    const heardThisRun = !!current.trim();
+    deadRuns = heardThisRun || Date.now() - runStartedAt > DEAD_RUN_MS ? 0 : deadRuns + 1;
+    if (deadRuns >= MAX_DEAD_RUNS) return finish();
+
+    // The engine gave up on its own; keep the session going.
+    if (heardThisRun) settled = fullText();
+    current = "";
+    clearTimeout(restartTimer);
+    restartTimer = setTimeout(() => {
+      if (!listening) return;
+      try {
+        recognition.start();
+      } catch (e) {
+        // Still winding down, or the engine is genuinely unavailable — the
+        // session can't continue, so close it out with whatever we heard
+        // rather than leaving the overlay up forever.
+        finish();
+      }
+    }, RESTART_DELAY_MS);
+  };
+
   recognition.onerror = (event) => {
-    clearSilenceTimer();
-    // Android's recognizer signs off with `aborted` at the end of a listen,
-    // including successful ones, and with `no-speech` when it times out.
-    // Neither is worth reporting once we already have words: the caller
-    // treats any error as fatal and would throw away the transcript it just
-    // received. Staying quiet lets the normal onend path run instead.
-    if ((event.error === "aborted" || event.error === "no-speech") && heardAnything) return;
+    // `aborted` and `no-speech` are how a run signs off; they say nothing
+    // about the session, which onend restarts. Reporting them would be
+    // wrong twice over — the caller treats an error as fatal and would
+    // throw away a transcript it had already received.
+    if (event.error === "aborted" || event.error === "no-speech") return;
+    // The engine can report a burst of these as it tears down (observed on
+    // device: not-allowed and network 1ms apart when Android pulled the mic
+    // back). The session is over on the first one; the rest are noise.
+    if (!listening) return;
+
+    listening = false;
+    clearTimers();
     const reason =
       event.error === "not-allowed" || event.error === "service-not-allowed"
         ? "blocked"
         : event.error === "network"
         ? "offline"
         : "unknown";
+    // Words already captured are still worth keeping, so a late network
+    // blip doesn't discard a finished sentence.
+    if (heardAnything) return finish();
+    ended = true; // closed out via onError; don't also fire onEnd from onend
+    clearTimers();
     onError && onError(reason);
   };
+
+  function stopSession() {
+    listening = false;
+    clearTimers();
+    try {
+      recognition.stop();
+    } catch (e) {
+      finish(); // never started, or already stopped — close the UI anyway
+    }
+  }
 
   return {
     start() {
@@ -104,9 +181,6 @@ export function createVoiceInput({ onResult, onStart, onEnd, onError }) {
         onError && onError("unknown");
       }
     },
-    stop() {
-      clearSilenceTimer();
-      recognition.stop();
-    },
+    stop: stopSession,
   };
 }

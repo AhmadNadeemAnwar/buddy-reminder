@@ -333,13 +333,15 @@ button { font-family: inherit; }
 .pill.muted { background: var(--surface-3); color: var(--ink-faint); }
 
 .row-actions { display: flex; align-items: flex-start; gap: 2px; flex: none; }
+/* Always visible, not revealed on hover: a touchscreen has no hover state,
+   so these were permanently invisible on the phone and there was no way to
+   reach add-subtask, delete or open at all. They rest at --ink-faint so
+   being always-on stays quiet, and pick up their tint on hover/press. */
 .row-add-sub, .row-delete, .row-open {
   width: 26px; height: 26px; border-radius: 8px; border: none; background: transparent;
   color: var(--ink-faint); cursor: pointer; display: grid; place-items: center;
-  opacity: 0; transition: opacity .15s, background .15s, color .15s;
+  transition: background .15s, color .15s;
 }
-.row:hover .row-add-sub, .row:hover .row-delete, .row:hover .row-open,
-.row-add-sub:focus-visible, .row-delete:focus-visible, .row-open:focus-visible { opacity: 1; }
 .row-add-sub:hover { background: var(--honey-tint); color: var(--honey); }
 .row-delete:hover { background: var(--terracotta-tint); color: var(--terracotta); }
 .row-open:hover { background: var(--surface-3); color: var(--ink); }

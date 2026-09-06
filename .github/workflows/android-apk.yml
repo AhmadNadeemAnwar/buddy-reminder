@@ -1,0 +1,55 @@
+name: Build Android APK
+
+# GitHub-hosted Ubuntu runners come with a JDK and Android SDK preinstalled —
+# this exists because the local machine that develops Buddy Reminder has
+# neither, and installing a multi-GB Android Studio just to produce one APK
+# isn't worth it when this is free (GitHub Actions' free tier) either way.
+#
+# Debug build only: sideload-only, self-signed with Gradle's own auto-
+# generated debug keystore — no signing secrets to manage, no Play Store
+# involved, matching this project's free-tier-only, no-store rule.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to publish the release asset below
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - run: npm ci
+      - run: npm run build:www
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Publish to a stable download link
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: "Buddy Reminder — Android (debug)"
+          prerelease: true
+          body: |
+            Automatically built from the latest commit on `main`.
+            Debug build for sideloading onto your own device only —
+            not signed for the Play Store.
+          files: android/app/build/outputs/apk/debug/app-debug.apk

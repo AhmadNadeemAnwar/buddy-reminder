@@ -424,7 +424,19 @@
 <div class="onboard-screen" id="onboardScreen" hidden>
   <div class="onboard-body">
     <div class="onboard-buddy" aria-hidden="true">
-      <span></span><span></span><span class="onboard-mouth"></span>
+      <svg viewBox="0 0 120 120">
+        <defs>
+          <linearGradient id="onboardBuddyGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="var(--grad-a)" />
+            <stop offset="100%" stop-color="var(--grad-b)" />
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r="56" fill="url(#onboardBuddyGrad)" opacity=".14" />
+        <rect x="28" y="28" width="64" height="64" rx="24" fill="url(#onboardBuddyGrad)" />
+        <circle cx="48" cy="58" r="4.5" fill="#1c1b1a" opacity=".82" />
+        <circle cx="72" cy="58" r="4.5" fill="#1c1b1a" opacity=".82" />
+        <path d="M46 76 Q60 89 74 76" stroke="#1c1b1a" stroke-width="5.5" stroke-linecap="round" fill="none" opacity=".82" />
+      </svg>
     </div>
     <div class="onboard-copy">
       <h2 id="onboardTitle"></h2>

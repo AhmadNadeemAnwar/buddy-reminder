@@ -977,25 +977,29 @@ function renderListView(today) {
   }
 }
 
-// Copy and buddy mood for each of the four filter chips' empty state.
-// "today" gets the happy/caught-up read — it's the one that means "you're
-// done for now"; the other three are just "nothing here yet", so a calmer
-// mood fits better than a triumphant one.
+// Copy and mood for each of the four filter chips' empty state. "today"
+// gets the happy/caught-up read — it's the one that means "you're done for
+// now"; the other three are just "nothing here yet", so a calmer mood fits
+// better than a triumphant one. Bodies avoid restating the title (the hero
+// line above already says "Nothing left for today" too — no need for a
+// third phrasing of the same fact) and never mention adding a task: the
+// composer bar sits right below this, always, so pointing at it here would
+// just be describing a button that's already on screen.
 const EMPTY_STATE_COPY = {
   today: {
     mood: "happy",
     title: "You're all caught up",
-    body: "Nothing due today. Enjoy the rest of your day, or get a head start on tomorrow.",
+    body: "Enjoy the rest of your day, or get a head start on tomorrow.",
   },
   upcoming: {
     mood: "calm",
     title: "Nothing on the horizon",
-    body: "No reminders coming up yet. Add one whenever something comes to mind.",
+    body: "Nothing scheduled ahead yet.",
   },
   all: {
     mood: "calm",
     title: "Nothing on your plate",
-    body: "Tell me what's on your mind — type it, or just say it.",
+    body: "Whenever something's on your mind, type it below — or just say it.",
   },
   done: {
     mood: "calm",
@@ -1004,6 +1008,33 @@ const EMPTY_STATE_COPY = {
   },
 };
 
+// A standalone illustration, not the header's .buddy component scaled up.
+// At 44px flat dot eyes and a rectangle mouth read fine as a small avatar;
+// blown up as the screen's one focal image those same shapes look
+// unfinished, and it'd put the same face on screen twice at once. SVG
+// instead of CSS shapes so "happy" can be an actual smile curve, with a
+// soft halo behind it for some presence rather than a bare flat icon.
+function emptyIllustrationSvg(mood) {
+  const mouth =
+    mood === "happy"
+      ? '<path d="M46 76 Q60 89 74 76" stroke="#1c1b1a" stroke-width="5.5" stroke-linecap="round" fill="none" opacity=".82"/>'
+      : '<path d="M47 78 H73" stroke="#1c1b1a" stroke-width="5.5" stroke-linecap="round" opacity=".82"/>';
+  return `
+    <svg viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="emptyBuddyGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="var(--grad-a)"/>
+          <stop offset="100%" stop-color="var(--grad-b)"/>
+        </linearGradient>
+      </defs>
+      <circle cx="60" cy="60" r="56" fill="url(#emptyBuddyGrad)" opacity=".14"/>
+      <rect x="28" y="28" width="64" height="64" rx="24" fill="url(#emptyBuddyGrad)"/>
+      <circle cx="48" cy="58" r="4.5" fill="#1c1b1a" opacity=".82"/>
+      <circle cx="72" cy="58" r="4.5" fill="#1c1b1a" opacity=".82"/>
+      ${mouth}
+    </svg>`;
+}
+
 function renderEmptyState(filter) {
   const copy = EMPTY_STATE_COPY[filter] || EMPTY_STATE_COPY.today;
 
@@ -1011,8 +1042,8 @@ function renderEmptyState(filter) {
   wrap.className = "empty-state";
 
   const face = document.createElement("div");
-  face.className = "buddy mood-" + copy.mood;
-  face.innerHTML = '<div class="buddy-mouth"></div>';
+  face.className = "empty-illustration";
+  face.innerHTML = emptyIllustrationSvg(copy.mood);
   wrap.appendChild(face);
 
   const title = document.createElement("p");
@@ -1024,14 +1055,6 @@ function renderEmptyState(filter) {
   body.className = "empty-state-body";
   body.textContent = copy.body;
   wrap.appendChild(body);
-
-  const cta = document.createElement("button");
-  cta.type = "button";
-  cta.className = "empty-state-cta";
-  cta.innerHTML =
-    '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 4.5v11M4.5 10h11" stroke-linecap="round"/></svg><span>Add a task</span>';
-  cta.addEventListener("click", () => openComposer());
-  wrap.appendChild(cta);
 
   return wrap;
 }

@@ -973,18 +973,67 @@ function renderListView(today) {
   });
 
   if (!any) {
-    const hint = document.createElement("p");
-    hint.className = "empty-hint";
-    hint.textContent =
-      activeFilter === "all"
-        ? "Nothing on your plate. Tell me what's on your mind."
-        : activeFilter === "done"
-        ? "Nothing finished yet."
-        : activeFilter === "upcoming"
-        ? "Nothing coming up yet."
-        : "Nothing due today.";
-    listsEl.appendChild(hint);
+    listsEl.appendChild(renderEmptyState(activeFilter));
   }
+}
+
+// Copy and buddy mood for each of the four filter chips' empty state.
+// "today" gets the happy/caught-up read — it's the one that means "you're
+// done for now"; the other three are just "nothing here yet", so a calmer
+// mood fits better than a triumphant one.
+const EMPTY_STATE_COPY = {
+  today: {
+    mood: "happy",
+    title: "You're all caught up",
+    body: "Nothing due today. Enjoy the rest of your day, or get a head start on tomorrow.",
+  },
+  upcoming: {
+    mood: "calm",
+    title: "Nothing on the horizon",
+    body: "No reminders coming up yet. Add one whenever something comes to mind.",
+  },
+  all: {
+    mood: "calm",
+    title: "Nothing on your plate",
+    body: "Tell me what's on your mind — type it, or just say it.",
+  },
+  done: {
+    mood: "calm",
+    title: "Nothing finished yet",
+    body: "Complete a task and it'll show up here.",
+  },
+};
+
+function renderEmptyState(filter) {
+  const copy = EMPTY_STATE_COPY[filter] || EMPTY_STATE_COPY.today;
+
+  const wrap = document.createElement("div");
+  wrap.className = "empty-state";
+
+  const face = document.createElement("div");
+  face.className = "buddy mood-" + copy.mood;
+  face.innerHTML = '<div class="buddy-mouth"></div>';
+  wrap.appendChild(face);
+
+  const title = document.createElement("p");
+  title.className = "empty-state-title";
+  title.textContent = copy.title;
+  wrap.appendChild(title);
+
+  const body = document.createElement("p");
+  body.className = "empty-state-body";
+  body.textContent = copy.body;
+  wrap.appendChild(body);
+
+  const cta = document.createElement("button");
+  cta.type = "button";
+  cta.className = "empty-state-cta";
+  cta.innerHTML =
+    '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 4.5v11M4.5 10h11" stroke-linecap="round"/></svg><span>Add a task</span>';
+  cta.addEventListener("click", () => openComposer());
+  wrap.appendChild(cta);
+
+  return wrap;
 }
 
 // Recurring tasks not currently overdue, out of all recurring tasks — a

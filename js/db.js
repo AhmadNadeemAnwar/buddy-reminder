@@ -14,9 +14,10 @@ function openDb() {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "id" });
-        store.createIndex("dueAt", "dueAt");
-        store.createIndex("updatedAt", "updatedAt");
+        // Every read goes through getAll() and filters/sorts in JS — the
+        // list is small enough (a personal task list) that a real index
+        // wouldn't be a meaningful win, so there isn't one.
+        db.createObjectStore(STORE, { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);

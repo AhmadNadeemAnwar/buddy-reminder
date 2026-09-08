@@ -12,9 +12,11 @@ const COLOR_KEY = "buddy-color-theme";
 const MODE_KEY = "buddy-mode";
 const FONT_KEY = "buddy-font-scale";
 
-export const COLOR_THEMES = ["buddy", "ocean", "blossom"];
-export const MODES = ["system", "light", "dark"];
-export const FONT_SCALES = { small: 0.9, medium: 1, large: 1.15 };
+// Not exported — only read inside this module. app.js gets at the same
+// choices through the getter/setter functions below instead.
+const COLOR_THEMES = ["buddy", "ocean", "blossom"];
+const MODES = ["system", "light", "dark"];
+const FONT_SCALES = { small: 0.9, medium: 1, large: 1.15 };
 
 function readStored(key, allowed, fallback) {
   try {

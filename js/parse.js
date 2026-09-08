@@ -2,6 +2,8 @@
 // "buy chicken every 2 weeks" or "call mom tomorrow" into a title,
 // due date, and recurrence interval. Runs entirely offline.
 
+import { startOfDay, addDays } from "./calendar.js";
+
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 // Voice input arrives as a full sentence ("set a reminder to car wash on
@@ -25,17 +27,6 @@ function stripVoiceOpener(text) {
   return text;
 }
 
-function addDays(date, n) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-}
-
-function startOfDay(d) {
-  const t = new Date(d);
-  t.setHours(0, 0, 0, 0);
-  return t;
-}
 
 export function parseInput(raw, today = new Date()) {
   let text = stripVoiceOpener(raw.trim());
@@ -123,27 +114,4 @@ export function parseInput(raw, today = new Date()) {
   const title = text ? text.charAt(0).toUpperCase() + text.slice(1) : raw.trim();
 
   return { title, dueAt: dueAt ? dueAt.toISOString() : null, intervalDays, hasTime };
-}
-
-export function describeParse(parsed, today = new Date()) {
-  const bits = [];
-  if (parsed.dueAt) {
-    const d = Math.round((startOfDay(parsed.dueAt) - startOfDay(today)) / 86400000);
-    let label = d === 0 ? "today" : d === 1 ? "tomorrow" : d > 1 ? `in ${d} days` : "due date passed";
-    if (parsed.hasTime && d >= 0) {
-      const t = new Date(parsed.dueAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-      label += ` at ${t}`;
-    }
-    bits.push("due " + label);
-  } else {
-    bits.push("no due date");
-  }
-  if (parsed.intervalDays) {
-    bits.push(
-      parsed.intervalDays % 7 === 0
-        ? `repeats every ${parsed.intervalDays / 7} week${parsed.intervalDays === 7 ? "" : "s"}`
-        : `repeats every ${parsed.intervalDays} days`
-    );
-  }
-  return bits;
 }

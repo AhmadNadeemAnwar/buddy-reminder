@@ -21,7 +21,6 @@
   --grad-a: #d9634a;
   --grad-b: #e29d36;
   --shadow: 28 22% 18%;
-  --hero-control: hsla(28 20% 12% / .05);
   --font-scale: 1; /* set by js/theme.js from Settings; independent of color theme, so it lives here once, not per-theme */
   color-scheme: light;
 }
@@ -46,7 +45,6 @@
     --grad-a: #e06d53;
     --grad-b: #e29d36;
     --shadow: 0 0% 0%;
-    --hero-control: hsla(0 0% 100% / .06);
     color-scheme: dark;
   }
 }
@@ -69,7 +67,6 @@
   --grad-a: #e06d53;
   --grad-b: #e29d36;
   --shadow: 0 0% 0%;
-  --hero-control: hsla(0 0% 100% / .06);
   color-scheme: dark;
 }
 
@@ -82,7 +79,7 @@
   --honey: #c1830f; --honey-tint: #faf0d9;
   --sage: #2f8a83; --sage-tint: #e0f2f0;
   --grad-a: #2f9e97; --grad-b: #3f7fd1;
-  --shadow: 200 30% 16%; --hero-control: hsla(200 30% 12% / .05);
+  --shadow: 200 30% 16%;
 }
 @media (prefers-color-scheme: dark) {
   [data-color-theme="ocean"]:not([data-theme="light"]) {
@@ -93,7 +90,7 @@
     --honey: #e8a83c; --honey-tint: #3a2c14;
     --sage: #5fb8b0; --sage-tint: #16302d;
     --grad-a: #3fb0a8; --grad-b: #4f93e0;
-    --shadow: 0 0% 0%; --hero-control: hsla(0 0% 100% / .06);
+    --shadow: 0 0% 0%;
   }
 }
 [data-color-theme="ocean"][data-theme="dark"] {
@@ -104,7 +101,7 @@
   --honey: #e8a83c; --honey-tint: #3a2c14;
   --sage: #5fb8b0; --sage-tint: #16302d;
   --grad-a: #3fb0a8; --grad-b: #4f93e0;
-  --shadow: 0 0% 0%; --hero-control: hsla(0 0% 100% / .06);
+  --shadow: 0 0% 0%;
 }
 
 /* ---------- Blossom: warm rose/plum world ---------- */
@@ -116,7 +113,7 @@
   --honey: #bb7c14; --honey-tint: #faf0d9;
   --sage: #5c8a5f; --sage-tint: #e7f0e7;
   --grad-a: #d9668a; --grad-b: #b85fc9;
-  --shadow: 340 25% 20%; --hero-control: hsla(340 25% 14% / .05);
+  --shadow: 340 25% 20%;
 }
 @media (prefers-color-scheme: dark) {
   [data-color-theme="blossom"]:not([data-theme="light"]) {
@@ -127,7 +124,7 @@
     --honey: #e2a341; --honey-tint: #392a14;
     --sage: #83b686; --sage-tint: #1e2c1f;
     --grad-a: #e076a0; --grad-b: #c377d6;
-    --shadow: 0 0% 0%; --hero-control: hsla(0 0% 100% / .06);
+    --shadow: 0 0% 0%;
   }
 }
 [data-color-theme="blossom"][data-theme="dark"] {
@@ -138,7 +135,7 @@
   --honey: #e2a341; --honey-tint: #392a14;
   --sage: #83b686; --sage-tint: #1e2c1f;
   --grad-a: #e076a0; --grad-b: #c377d6;
-  --shadow: 0 0% 0%; --hero-control: hsla(0 0% 100% / .06);
+  --shadow: 0 0% 0%;
 }
 
 * { box-sizing: border-box; }
@@ -174,11 +171,6 @@ button { font-family: inherit; }
 }
 
 /* ---------- top row ---------- */
-.topbar { flex: none; display: flex; align-items: center; gap: 13px; padding: 18px 20px 14px; }
-.topbar-text { flex: 1; min-width: 0; }
-.topbar-text h1 { font-size: 18px; }
-.topbar-status { margin: 3px 0 0; font-size: 12.5px; color: var(--ink-faint); }
-
 .bell {
   flex: none; position: relative;
   width: 36px; height: 36px; border-radius: 50%;
@@ -195,14 +187,6 @@ button { font-family: inherit; }
   display: none;
 }
 .bell-dot.show { display: block; }
-
-.view-switch { flex: none; display: flex; gap: 2px; background: var(--hero-control); border-radius: 999px; padding: 3px; }
-.view-switch button {
-  width: 32px; height: 28px; border: none; background: transparent; border-radius: 999px;
-  color: var(--ink-faint); cursor: pointer; display: grid; place-items: center; transition: background .15s, color .15s;
-}
-.view-switch button svg { width: 15px; height: 15px; }
-.view-switch button[aria-pressed="true"] { background: var(--surface); color: var(--terracotta); box-shadow: 0 1px 2px hsla(var(--shadow) / .1); }
 
 /* ---------- buddy ---------- */
 .buddy {
@@ -328,7 +312,6 @@ button { font-family: inherit; }
 .pill-edit:hover { filter: brightness(1.12); box-shadow: 0 0 0 1.5px currentColor; }
 .pill.terracotta { background: var(--terracotta-tint); color: var(--terracotta); }
 .pill.honey { background: var(--honey-tint); color: var(--honey); }
-.pill.sage { background: var(--sage-tint); color: var(--sage); }
 /* a finished task's reminder carries no urgency — it goes quiet */
 .pill.muted { background: var(--surface-3); color: var(--ink-faint); }
 
@@ -420,60 +403,7 @@ button { font-family: inherit; }
 .nudge-empty p:first-child { margin: 0; font-size: 16px; font-weight: 700; color: var(--ink); }
 .nudge-empty p:last-child { margin: 6px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-dim); }
 
-/* ---------- composer ---------- */
-.composer { flex: none; padding: 8px 20px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
-.composer form {
-  display: flex; align-items: center; gap: 8px;
-  background: var(--surface-2); border: 1px solid var(--line);
-  border-radius: 18px; padding: 8px 8px 8px 16px;
-  transition: border-color .15s;
-}
-.composer form:focus-within { border-color: var(--line-strong); }
-.composer input {
-  flex: 1; min-width: 0; border: none; background: transparent;
-  font: inherit; font-size: 14.5px; color: var(--ink); padding: 8px 0;
-}
-.composer input:focus { outline: none; }
-.composer input::placeholder { color: var(--ink-faint); }
-
-.mic-btn {
-  flex: none; width: 36px; height: 36px; border-radius: 50%; border: none;
-  background: var(--terracotta); color: #fff; cursor: pointer;
-  display: grid; place-items: center; transition: transform .12s, filter .15s;
-}
-.mic-btn:hover { filter: brightness(1.08); }
-.mic-btn:active { transform: scale(.92); }
-.mic-btn svg { width: 16px; height: 16px; }
-
-.add-btn {
-  flex: none; width: 36px; height: 36px; border-radius: 50%; border: none;
-  background: var(--surface-3); color: var(--ink); cursor: pointer;
-  display: grid; place-items: center; transition: background .15s, transform .12s;
-}
-.add-btn svg { width: 16px; height: 16px; }
-.add-btn:hover { background: var(--honey); color: #fff; }
-.add-btn:active { transform: scale(.92); }
-
 .voice-status { margin: 0 4px; font-size: 12.5px; color: var(--terracotta); }
-
-/* reminder chip + picker */
-.when-row { display: flex; padding-left: 4px; }
-.when-row:empty { display: none; }
-.when-add, .when-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 700; border-radius: 20px; padding: 6px 12px; cursor: pointer;
-}
-.when-add { border: 1px dashed var(--line-strong); background: transparent; color: var(--ink-faint); font-family: inherit; }
-.when-add:hover { border-color: var(--honey); color: var(--honey); }
-.when-add svg, .when-chip svg { width: 12px; height: 12px; flex: none; }
-.when-chip { border: none; background: var(--honey-tint); color: var(--honey); padding-right: 5px; }
-.when-chip-label { border: none; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
-.when-chip-clear {
-  border: none; background: none; color: inherit; cursor: pointer; opacity: .6;
-  width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%;
-}
-.when-chip-clear:hover { opacity: 1; background: hsla(var(--shadow) / .12); }
-.when-chip-clear svg { width: 11px; height: 11px; }
 
 /* Compact by design: controls sit right beside their labels and flow onto
    one line, so setting a date is a short cursor trip rather than a hike
@@ -661,7 +591,6 @@ button { font-family: inherit; }
 .day-save { background: var(--sage); color: var(--bg); }
 
 /* ---------- settings ---------- */
-.settings-modal { gap: 22px; }
 .settings-section { display: flex; flex-direction: column; gap: 10px; }
 /* The panel is a plain block, so without this the groups run together — a
    trailing hint line ends up sitting directly against the next group's

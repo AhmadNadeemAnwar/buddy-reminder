@@ -3,6 +3,8 @@
 // leaves it for you to review and confirm. Kept separate from theme.js so
 // that file stays scoped to what it says on the tin: appearance.
 
+import { DEFAULT_URL as OLLAMA_DEFAULT_URL } from "./ollama.js";
+
 const VOICE_AUTO_KEY = "buddy-voice-auto-create";
 
 function readBool(key, fallback) {
@@ -80,7 +82,7 @@ export function setOllamaEnabled(value) {
 }
 
 export function getOllamaUrl() {
-  return readString(OLLAMA_URL_KEY, "http://localhost:11434");
+  return readString(OLLAMA_URL_KEY, OLLAMA_DEFAULT_URL);
 }
 
 export function setOllamaUrl(url) {

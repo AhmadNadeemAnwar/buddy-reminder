@@ -140,7 +140,6 @@ export function pollDueReminders(items) {
 }
 
 const triggersSupported = !native && typeof Notification !== "undefined" && "TimestampTrigger" in window;
-export const backgroundTriggersSupported = native || triggersSupported;
 
 // The authoritative scheduler on native (a real alarm, not a foreground
 // poll) — called on create AND on every edit that touches dueAt, via

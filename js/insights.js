@@ -2,25 +2,10 @@
 // no external AI call: just checking recurring items against the interval
 // the user told us about.
 
+import { daysBetween, repeatLabel } from "./calendar.js";
+
 const GRACE_DAYS = 2;
 const STALE_TODO_DAYS = 14;
-const DAY_MS = 86400000;
-
-function daysBetween(a, b) {
-  const da = new Date(a);
-  da.setHours(0, 0, 0, 0);
-  const db_ = new Date(b);
-  db_.setHours(0, 0, 0, 0);
-  return Math.round((da - db_) / DAY_MS);
-}
-
-function formatInterval(intervalDays) {
-  if (intervalDays % 7 === 0) {
-    const weeks = intervalDays / 7;
-    return `every ${weeks} week${weeks === 1 ? "" : "s"}`;
-  }
-  return `every ${intervalDays} day${intervalDays === 1 ? "" : "s"}`;
-}
 
 // Two things Buddy notices on its own, merged into one sorted list:
 //  - a recurring item whose expected next occurrence has passed by more
@@ -61,7 +46,7 @@ export function messageFor(flag) {
   if (kind === "stale-todo") {
     return `"${item.title}" has been sitting on your list for ${days} days. Want to give it a moment today, or should I stop mentioning it?`;
   }
-  return `You usually take care of "${item.title}" ${formatInterval(
+  return `You usually take care of "${item.title}" ${repeatLabel(
     item.recurring.intervalDays
   )} — it's been ${days} day${days === 1 ? "" : "s"} longer than usual. Forgot this one?`;
 }

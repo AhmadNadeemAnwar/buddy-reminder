@@ -7,15 +7,6 @@ const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 export const voiceSupported = !!Recognition;
 
-// Detected the same way notify.js does it — Capacitor's native host injects
-// this global at runtime. Kept local so this stays a standalone wrapper.
-const isNative = !!(
-  typeof window !== "undefined" &&
-  window.Capacitor &&
-  window.Capacitor.isNativePlatform &&
-  window.Capacitor.isNativePlatform()
-);
-
 // A listen ends when the speaker says it ends — they tap Stop — and not
 // before. Nothing here guesses at whether a pause means "finished": people
 // stop to think mid-sentence, and being cut off there is worse than holding

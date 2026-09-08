@@ -13,7 +13,17 @@ import {
   isNative,
 } from "./notify.js";
 import { initSync, pushItem, pushDelete } from "./sync.js";
-import { WEEKDAY_LABELS, dateKey, monthMatrix, itemsByDay, isToday } from "./calendar.js";
+import {
+  WEEKDAY_LABELS,
+  dateKey,
+  monthMatrix,
+  itemsByDay,
+  isToday,
+  startOfDay,
+  daysBetween,
+  addDays,
+  repeatLabel,
+} from "./calendar.js";
 import { initTheme, getColorTheme, getMode, setColorTheme, setMode, getFontScale, setFontScale } from "./theme.js";
 import {
   getVoiceAutoCreate,
@@ -39,21 +49,6 @@ import { isSyncEnabled } from "./sync.js";
 import { chat as ollamaChat, listModels, buildContext } from "./ollama.js";
 
 const OWNER_NAME = "Ahmad";
-const DAY_MS = 86400000;
-
-function startOfDay(d) {
-  const t = new Date(d);
-  t.setHours(0, 0, 0, 0);
-  return t;
-}
-function daysBetween(a, b) {
-  return Math.round((startOfDay(a) - startOfDay(b)) / DAY_MS);
-}
-function addDays(d, n) {
-  const t = new Date(d);
-  t.setDate(t.getDate() + n);
-  return t;
-}
 
 // ---------------- elements ----------------
 const listsEl = document.getElementById("lists");
@@ -131,6 +126,7 @@ const notifToggleSwitch = document.getElementById("notifToggleSwitch");
 const notifToggleHint = document.getElementById("notifToggleHint");
 const syncToggleRow = document.getElementById("syncToggleRow");
 const syncToggleSwitch = document.getElementById("syncToggleSwitch");
+const syncToggleHint = document.getElementById("syncToggleHint");
 const lockPreviewDate = document.getElementById("lockPreviewDate");
 const lockPreviewTime = document.getElementById("lockPreviewTime");
 const lockCard = document.getElementById("lockCard");
@@ -218,16 +214,6 @@ function showToast(msg) {
 }
 
 // ---------------- when helpers ----------------
-function repeatLabel(intervalDays) {
-  if (!intervalDays) return "";
-  if (intervalDays === 1) return "every day";
-  if (intervalDays === 7) return "every week";
-  if (intervalDays === 14) return "every 2 weeks";
-  if (intervalDays === 30) return "every month";
-  if (intervalDays % 7 === 0) return `every ${intervalDays / 7} weeks`;
-  return `every ${intervalDays} days`;
-}
-
 function dayLabel(date, today = new Date()) {
   const d = daysBetween(date, today);
   if (d === 0) return "Today";
@@ -1777,7 +1763,15 @@ function reflectToggles() {
     ? "Only sent when something's actually pending, and only fires once — it renews itself each time you open Buddy."
     : "Native app only. Only sent when something's actually pending, and only fires once — it renews itself each time you open Buddy.";
 
-  syncToggleSwitch.classList.toggle("on", isSyncEnabled());
+  const syncOn = isSyncEnabled();
+  syncToggleSwitch.classList.toggle("on", syncOn);
+  // This one isn't a real switch — sync is on only if js/firebase-config.js
+  // exists with syncEnabled: true in it, set up by hand per the README, not
+  // toggled from here. So unlike the other hints, there's no click to
+  // react to; this just needs to stay honest about which state it's in.
+  syncToggleHint.textContent = syncOn
+    ? "On — syncing across your devices."
+    : "Off until you add your own Firebase config.";
 
   const ollamaOn = getOllamaEnabled();
   ollamaToggleSwitch.classList.toggle("on", ollamaOn);

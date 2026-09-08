@@ -197,6 +197,13 @@ const iconBell =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3a4 4 0 0 0-4 4c0 3.5-1.2 4.7-1.2 4.7h10.4S14 10.5 14 7a4 4 0 0 0-4-4zM8.6 14.4a1.6 1.6 0 0 0 2.8 0" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const iconChevron =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 4l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// Small static "Buddy is talking" avatar — nudge cards and Ask Buddy chat
+// replies. Always the happy face; these are brief, friendly asides, not a
+// mood readout the way the hero avatar is.
+const buddyFaceSvg =
+  '<svg class="buddy-face" viewBox="0 0 120 120" aria-hidden="true">' +
+  '<ellipse class="buddy-eye" cx="42" cy="54" rx="5.5" ry="7"/><ellipse class="buddy-eye" cx="78" cy="54" rx="5.5" ry="7"/>' +
+  '<path class="buddy-mouth-path mouth-happy" d="M40 76 Q60 90 80 76"/></svg>';
 
 // ---------------- toast ----------------
 let toastTimer = null;
@@ -1087,7 +1094,7 @@ function renderInsight(today) {
     const card = document.createElement("div");
     card.className = "nudge";
     card.innerHTML =
-      '<div class="nudge-avatar" aria-hidden="true"></div>' +
+      '<div class="nudge-avatar buddy mood-happy" aria-hidden="true">' + buddyFaceSvg + "</div>" +
       '<div class="nudge-bubble">' +
       '<p class="nudge-text"></p>' +
       '<div class="nudge-actions"><button class="nudge-add">Remind me today</button><button class="nudge-dismiss">Not now</button></div>' +
@@ -1133,8 +1140,9 @@ function appendChatMessage(role, text) {
 
   if (role !== "user") {
     const avatar = document.createElement("div");
-    avatar.className = "nudge-avatar";
+    avatar.className = "nudge-avatar buddy mood-happy";
     avatar.setAttribute("aria-hidden", "true");
+    avatar.innerHTML = buddyFaceSvg;
     row.appendChild(avatar);
   }
 

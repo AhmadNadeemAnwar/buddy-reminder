@@ -49,11 +49,15 @@ function syncMetaThemeColor() {
   if (accent) meta.setAttribute("content", accent);
 }
 
+// Default (nothing chosen yet) is Ocean + Light — cooler and airier than
+// the bare :root values (the warm Buddy palette, dark-first). index.html's
+// own inline pre-paint copy of this logic needs to keep matching, or first
+// paint and this would disagree.
 export function getColorTheme() {
-  return readStored(COLOR_KEY, COLOR_THEMES, "buddy");
+  return readStored(COLOR_KEY, COLOR_THEMES, "ocean");
 }
 export function getMode() {
-  return readStored(MODE_KEY, MODES, "system");
+  return readStored(MODE_KEY, MODES, "light");
 }
 export function getFontScale() {
   return readStored(FONT_KEY, Object.keys(FONT_SCALES), "medium");

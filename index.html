@@ -5,17 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Buddy Reminder</title>
 <meta name="description" content="A calm companion for getting things done — offline-first tasks and reminders that notice what you've forgotten.">
-<meta name="theme-color" content="#0f0e0d">
+<meta name="theme-color" content="#2f9e97">
 <script>
   // Apply any saved theme before the stylesheet paints, so there's no flash
   // of the default theme first. Kept in sync with js/theme.js by hand —
   // this can't just import it, a module script runs too late for this.
+  //
+  // Default (nothing saved yet) is Ocean + Light — cooler and airier than
+  // the bare :root values, which are the warm Buddy palette in dark mode.
+  // Explicitly setting both attributes here, rather than only ever setting
+  // them for a non-default choice, is what makes that the first-paint
+  // default too instead of just theme.js's own fallback.
   (function () {
     try {
       var c = localStorage.getItem("buddy-color-theme");
-      if (c === "ocean" || c === "blossom") document.documentElement.dataset.colorTheme = c;
+      document.documentElement.dataset.colorTheme = c === "buddy" || c === "blossom" ? c : "ocean";
       var m = localStorage.getItem("buddy-mode");
-      if (m === "light" || m === "dark") document.documentElement.dataset.theme = m;
+      if (m === "dark") document.documentElement.dataset.theme = "dark";
+      else if (m !== "system") document.documentElement.dataset.theme = "light"; // default, and explicit "light" both land here
       var scales = { small: "0.9", medium: "1", large: "1.15" };
       var f = localStorage.getItem("buddy-font-scale");
       if (scales[f]) document.documentElement.style.setProperty("--font-scale", scales[f]);
@@ -44,7 +51,15 @@
         <circle cx="44" cy="44" r="41" class="ring-track" />
         <circle cx="44" cy="44" r="41" class="ring-progress" id="ringProgress" />
       </svg>
-      <div class="buddy" id="buddy"><span class="buddy-mouth"></span></div>
+      <div class="buddy" id="buddy">
+        <svg class="buddy-face" viewBox="0 0 120 120" aria-hidden="true">
+          <ellipse class="buddy-eye" cx="42" cy="54" rx="5.5" ry="7" />
+          <ellipse class="buddy-eye" cx="78" cy="54" rx="5.5" ry="7" />
+          <path class="buddy-mouth-path mouth-happy" d="M40 76 Q60 90 80 76" />
+          <path class="buddy-mouth-path mouth-concerned" d="M40 78 Q60 64 80 78" />
+          <path class="buddy-mouth-path mouth-calm" d="M42 78 H78" />
+        </svg>
+      </div>
     </div>
     <div class="hero-text">
       <p class="eyebrow" id="dateLine">&nbsp;</p>
@@ -330,7 +345,15 @@
 
 <div class="voice-overlay" id="voiceOverlay" hidden>
   <div class="voice-inner">
-    <div class="voice-orb"><div class="buddy voice-buddy"></div></div>
+    <div class="voice-orb">
+      <div class="buddy voice-buddy mood-happy">
+        <svg class="buddy-face" viewBox="0 0 120 120" aria-hidden="true">
+          <ellipse class="buddy-eye" cx="42" cy="54" rx="5.5" ry="7" />
+          <ellipse class="buddy-eye" cx="78" cy="54" rx="5.5" ry="7" />
+          <path class="buddy-mouth-path mouth-happy" d="M40 76 Q60 90 80 76" />
+        </svg>
+      </div>
+    </div>
     <p class="voice-transcript" id="voiceTranscript">Listening…</p>
     <div class="waveform" id="waveform">
       <span></span><span></span><span></span><span></span><span></span><span></span><span></span>

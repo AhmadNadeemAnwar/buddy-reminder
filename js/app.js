@@ -1,5 +1,14 @@
 import { db } from "./db.js";
 import { computeFlags, messageFor } from "./insights.js";
+import {
+  PRIORITIES,
+  PRIORITY_LABEL,
+  PRIORITY_COLOR,
+  PRIORITY_RANK,
+  CATEGORIES,
+  CATEGORY_LABEL,
+  CATEGORY_SWATCH,
+} from "./taxonomy.js";
 import { voiceSupported, createVoiceInput } from "./voice.js";
 import { parseInput } from "./parse.js";
 import {
@@ -105,7 +114,19 @@ const parseChip = document.getElementById("parseChip");
 const quickDay = document.getElementById("quickDay");
 const quickTime = document.getElementById("quickTime");
 const quickRepeat = document.getElementById("quickRepeat");
+const quickPriority = document.getElementById("quickPriority");
+const quickCategory = document.getElementById("quickCategory");
 const saveDraftBtn = document.getElementById("saveDraftBtn");
+
+// filter sheet
+const filterOpenBtn = document.getElementById("filterOpenBtn");
+const filterActiveDot = document.getElementById("filterActiveDot");
+const filterOverlay = document.getElementById("filterOverlay");
+const filterClose = document.getElementById("filterClose");
+const filterPriorityRow = document.getElementById("filterPriorityRow");
+const filterCategoryRow = document.getElementById("filterCategoryRow");
+const filterReset = document.getElementById("filterReset");
+const filterApply = document.getElementById("filterApply");
 
 // task detail screen
 const detailScreen = document.getElementById("detailScreen");
@@ -115,6 +136,9 @@ const detailCheck = document.getElementById("detailCheck");
 const detailTitle = document.getElementById("detailTitle");
 const detailReminderRow = document.getElementById("detailReminderRow");
 const detailReminderValue = document.getElementById("detailReminderValue");
+const detailPriority = document.getElementById("detailPriority");
+const detailCategory = document.getElementById("detailCategory");
+const detailNotes = document.getElementById("detailNotes");
 const detailStepsLabel = document.getElementById("detailStepsLabel");
 const detailStepsList = document.getElementById("detailStepsList");
 const detailStepInput = document.getElementById("detailStepInput");
@@ -177,6 +201,11 @@ calendarMonth.setDate(1);
 let openAddFor = null;
 let justAddedId = null;
 let activeFilter = "today"; // open on what's due today, not the whole list
+// Narrower than the chips above: priority is one value or none; category is
+// "show tasks in any of these" — a Set, since unlike a task's own single
+// category, a filter naturally wants to allow several at once.
+let filterPriority = null;
+let filterCategories = new Set();
 let expandedSections = new Set();
 let editingItemId = null; // task whose reminder the picker is currently editing
 let selectedDate = null;
@@ -185,6 +214,8 @@ let detailItemId = null; // task shown full-screen, or null
 
 let pendingWhen = { dueAt: null, hasTime: false, intervalDays: null };
 let whenTouched = false;
+let pendingPriority = null;
+let pendingCategory = null;
 
 // ---------------- icons ----------------
 const iconCheck =
@@ -204,6 +235,22 @@ const buddyFaceSvg =
   '<svg class="buddy-face" viewBox="0 0 120 120" aria-hidden="true">' +
   '<ellipse class="buddy-eye" cx="42" cy="54" rx="5.5" ry="7"/><ellipse class="buddy-eye" cx="78" cy="54" rx="5.5" ry="7"/>' +
   '<path class="buddy-mouth-path mouth-happy" d="M40 76 Q60 90 80 76"/></svg>';
+
+// Priority/category quick-pick rows appear twice — the composer sheet and
+// the detail screen — so the markup is built once here rather than typed
+// out in index.html or duplicated between the two call sites.
+function priorityRowHtml() {
+  return PRIORITIES.map(
+    (p) =>
+      `<button type="button" data-priority="${p}" style="--dot:var(--${PRIORITY_COLOR[p]})"><span class="quick-dot"></span>${PRIORITY_LABEL[p]}</button>`
+  ).join("");
+}
+function categoryRowHtml() {
+  return CATEGORIES.map(
+    (c) =>
+      `<button type="button" data-category="${c}" style="--dot:${CATEGORY_SWATCH[c]}"><span class="quick-dot"></span>${CATEGORY_LABEL[c]}</button>`
+  ).join("");
+}
 
 // ---------------- toast ----------------
 let toastTimer = null;
@@ -394,6 +441,8 @@ document.getElementById("whenClear").addEventListener("click", () => {
 function resetPendingWhen() {
   pendingWhen = { dueAt: null, hasTime: false, intervalDays: null };
   whenTouched = false;
+  pendingPriority = null;
+  pendingCategory = null;
 }
 
 // ---------------- greeting & buddy hero ----------------
@@ -530,7 +579,10 @@ const FILTERS = [
 const SECTION_CAP = 7;
 
 function matchesFilter(item, today) {
-  return FILTER_GROUPS[activeFilter].includes(bucketOf(item, today));
+  if (!FILTER_GROUPS[activeFilter].includes(bucketOf(item, today))) return false;
+  if (filterPriority && item.priority !== filterPriority) return false;
+  if (filterCategories.size && !filterCategories.has(item.category)) return false;
+  return true;
 }
 
 function renderFilterBar() {
@@ -626,6 +678,15 @@ function duePill(item, today) {
     : `<button type="button" class="${classes}" data-pill-for="${item.id}">${iconBell}${text}</button>`;
 }
 
+// Category only (not priority) gets its own pill on the list row, matching
+// the reference: a category tag identifies what a task belongs to at a
+// glance, where priority is something you'd check inside the task, not
+// scan a whole list for.
+function categoryPill(item) {
+  if (!item.category) return "";
+  return `<span class="pill cat-pill" style="--dot:${CATEGORY_SWATCH[item.category]}">${CATEGORY_LABEL[item.category]}</span>`;
+}
+
 function subLine(item, childrenMap) {
   const bits = [];
   if (item.recurring) bits.push(repeatLabel(item.recurring.intervalDays).replace(/^e/, "E"));
@@ -674,10 +735,11 @@ function renderItemNode(item, childrenMap, today, depth) {
   // squeeze the title into a two-line stack on a narrow screen.
   const sub = subLine(item, childrenMap);
   const pill = depth === 0 ? duePill(item, today) : "";
-  if (sub || pill) {
+  const catPill = depth === 0 ? categoryPill(item) : "";
+  if (sub || pill || catPill) {
     const meta = document.createElement("div");
     meta.className = "row-meta";
-    meta.innerHTML = pill + (sub ? `<span class="row-sub">${sub}</span>` : "");
+    meta.innerHTML = pill + catPill + (sub ? `<span class="row-sub">${sub}</span>` : "");
     const editable = meta.querySelector(".pill-edit");
     if (editable) editable.addEventListener("click", (e) => openReminderEditor(item, e));
     body.appendChild(meta);
@@ -811,6 +873,16 @@ function renderDetail() {
   const when = { dueAt: item.dueAt, hasTime: !!item.hasTime, intervalDays: item.recurring ? item.recurring.intervalDays : null };
   detailReminderValue.textContent = describeWhen(when) || "None";
 
+  detailPriority.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.priority === item.priority));
+  });
+  detailCategory.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.category === item.category));
+  });
+  // Only touch the field if it's not what the user is actively typing —
+  // renderDetail() re-runs after every save, including this one's own.
+  if (document.activeElement !== detailNotes) detailNotes.value = item.notes || "";
+
   const childrenMap = buildChildrenMap(allItems);
   const kids = childrenMap.get(item.id) || [];
   detailStepsLabel.textContent = kids.length ? `${kids.filter((k) => k.completedAt).length} of ${kids.length} done` : "";
@@ -878,6 +950,37 @@ detailTitle.addEventListener("keydown", (e) => {
     detailTitle.blur();
   }
 });
+
+detailPriority.innerHTML = priorityRowHtml();
+detailCategory.innerHTML = categoryRowHtml();
+// Unlike the composer's pendingPriority/pendingCategory, this edits an
+// existing task directly — same tap-again-to-clear behavior, but each tap
+// saves immediately rather than waiting on a form submit.
+detailPriority.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const item = allItems.find((i) => i.id === detailItemId);
+    if (!item) return;
+    const priority = item.priority === btn.dataset.priority ? null : btn.dataset.priority;
+    await saveUpdate(item.id, { priority });
+    renderDetail();
+  });
+});
+detailCategory.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const item = allItems.find((i) => i.id === detailItemId);
+    if (!item) return;
+    const category = item.category === btn.dataset.category ? null : btn.dataset.category;
+    await saveUpdate(item.id, { category });
+    renderDetail();
+  });
+});
+detailNotes.addEventListener("blur", async () => {
+  const item = allItems.find((i) => i.id === detailItemId);
+  if (!item) return;
+  const v = detailNotes.value;
+  if (v !== item.notes) await saveUpdate(item.id, { notes: v });
+});
+
 detailReminderRow.addEventListener("click", (e) => {
   const item = allItems.find((i) => i.id === detailItemId);
   if (!item) return;
@@ -1535,6 +1638,8 @@ async function addFromCapture() {
     dueAt: when.dueAt,
     hasTime: !!when.hasTime,
     recurring: when.intervalDays ? { intervalDays: when.intervalDays } : null,
+    priority: pendingPriority,
+    category: pendingCategory,
   });
   pushItem(item);
   scheduleTrigger(item);
@@ -1590,6 +1695,13 @@ function updateComposer() {
     b.setAttribute("aria-pressed", String(b.dataset.repeat === curRepeat));
   });
 
+  quickPriority.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.priority === pendingPriority));
+  });
+  quickCategory.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.category === pendingCategory));
+  });
+
   saveDraftBtn.textContent = w.dueAt || w.intervalDays ? "Save reminder" : "Save task";
 }
 
@@ -1603,6 +1715,8 @@ function openComposer() {
   input.value = "";
   pendingWhen = { dueAt: null, hasTime: false, intervalDays: null };
   whenTouched = false;
+  pendingPriority = null;
+  pendingCategory = null;
   showComposerSheet();
   setTimeout(() => input.focus(), 50);
 }
@@ -1667,6 +1781,104 @@ quickRepeat.querySelectorAll("button").forEach((btn) => {
     pendingWhen = { dueAt, hasTime: w.hasTime, intervalDays };
     updateComposer();
   });
+});
+
+// Priority and category rows are populated from taxonomy.js rather than
+// written out in index.html, so there's one list to keep in sync, not two.
+// Tapping the already-selected option clears it — neither field has its
+// own explicit "None" button the way quickDay/quickRepeat do. Each button
+// carries its own accent as a --dot custom property, so the selected
+// state can use that color (CSS) instead of the generic honey used
+// elsewhere in this sheet — more useful here, since the color is the
+// whole point of picking one.
+quickPriority.innerHTML = priorityRowHtml();
+quickCategory.innerHTML = categoryRowHtml();
+
+quickPriority.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    pendingPriority = pendingPriority === btn.dataset.priority ? null : btn.dataset.priority;
+    updateComposer();
+  });
+});
+quickCategory.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    pendingCategory = pendingCategory === btn.dataset.category ? null : btn.dataset.category;
+    updateComposer();
+  });
+});
+
+// ---------------- filter sheet ----------------
+// Draft state, committed to the real filterPriority/filterCategories only
+// on Apply — Reset/Apply buttons imply "try some choices, then commit,"
+// unlike the composer's pickers (each tap there already writes straight
+// into the field it belongs to; there's no draft to abandon).
+let draftFilterPriority = null;
+let draftFilterCategories = new Set();
+
+filterPriorityRow.innerHTML = priorityRowHtml();
+filterCategoryRow.innerHTML = categoryRowHtml();
+
+function updateFilterSheet() {
+  filterPriorityRow.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.priority === draftFilterPriority));
+  });
+  filterCategoryRow.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(draftFilterCategories.has(b.dataset.category)));
+  });
+}
+
+filterPriorityRow.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    draftFilterPriority = draftFilterPriority === btn.dataset.priority ? null : btn.dataset.priority;
+    updateFilterSheet();
+  });
+});
+// Category filtering allows several at once — "show Work or Personal" — so
+// each pill toggles independently instead of the tag-a-task single choice.
+filterCategoryRow.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const c = btn.dataset.category;
+    if (draftFilterCategories.has(c)) draftFilterCategories.delete(c);
+    else draftFilterCategories.add(c);
+    updateFilterSheet();
+  });
+});
+
+function reflectFilterDot() {
+  filterActiveDot.classList.toggle("show", !!filterPriority || filterCategories.size > 0);
+}
+
+function openFilterSheet() {
+  draftFilterPriority = filterPriority;
+  draftFilterCategories = new Set(filterCategories);
+  updateFilterSheet();
+  filterOverlay.hidden = false;
+  requestAnimationFrame(() => filterOverlay.classList.add("show"));
+}
+function closeFilterSheet() {
+  filterOverlay.classList.remove("show");
+  setTimeout(() => {
+    filterOverlay.hidden = true;
+  }, 180);
+}
+
+filterOpenBtn.addEventListener("click", openFilterSheet);
+filterClose.addEventListener("click", closeFilterSheet);
+filterOverlay.addEventListener("click", (e) => {
+  if (e.target === filterOverlay) closeFilterSheet();
+});
+filterReset.addEventListener("click", () => {
+  draftFilterPriority = null;
+  draftFilterCategories = new Set();
+  updateFilterSheet();
+});
+filterApply.addEventListener("click", () => {
+  filterPriority = draftFilterPriority;
+  filterCategories = draftFilterCategories;
+  reflectFilterDot();
+  closeFilterSheet();
+  expandedSections.clear();
+  render();
 });
 
 // ---------------- capture UI ----------------

@@ -329,6 +329,12 @@ button { font-family: inherit; }
 .pill.honey { background: var(--honey-tint); color: var(--honey); }
 /* a finished task's reminder carries no urgency — it goes quiet */
 .pill.muted { background: var(--surface-3); color: var(--ink-faint); }
+/* --dot (set inline, one of the fixed swatches in taxonomy.js — not a
+   theme token, category needs 4 distinct colors that don't collide with
+   the terracotta/honey/sage priority already uses) mixed toward the
+   surface for the tint, same relationship terracotta/honey have to their
+   own -tint pair, just computed instead of hand-picked per theme. */
+.cat-pill { background: color-mix(in srgb, var(--dot) 16%, var(--surface-2)); color: var(--dot); }
 
 .row-actions { display: flex; align-items: flex-start; gap: 2px; flex: none; }
 /* Always visible, not revealed on hover: a touchscreen has no hover state,
@@ -737,6 +743,15 @@ button { font-family: inherit; }
 .detail-field-label { flex: 1; min-width: 0; font-size: 14.5px; color: var(--ink-dim); }
 .detail-field-value { font-size: 14.5px; font-weight: 700; color: var(--ink); }
 
+.detail-tag-section, .detail-notes-section { display: flex; flex-direction: column; gap: 8px; }
+.detail-notes {
+  width: 100%; resize: vertical; min-height: 64px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; font: inherit; font-size: 14px; color: var(--ink); line-height: 1.5;
+}
+.detail-notes::placeholder { color: var(--ink-faint); }
+.detail-notes:focus { outline: none; border-color: var(--line-strong); }
+
 .detail-steps-section { display: flex; flex-direction: column; gap: 10px; }
 .detail-steps-head { display: flex; align-items: baseline; gap: 8px; }
 .detail-steps-count { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink-faint); }
@@ -836,12 +851,30 @@ button { font-family: inherit; }
 .quick-row button:hover { border-color: var(--honey); color: var(--honey); }
 .quick-row button[aria-pressed="true"] { background: var(--honey); border-color: var(--honey); color: #fff; }
 
+.quick-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; background: var(--dot); }
+/* Priority/category buttons carry their own accent (--dot, set inline per
+   button) — selected uses that instead of the generic honey above, since
+   the color is the whole point of the choice here. */
+#quickPriority button:hover, #quickCategory button:hover { border-color: var(--dot); color: var(--dot); }
+#quickPriority button[aria-pressed="true"], #quickCategory button[aria-pressed="true"] {
+  background: var(--dot); border-color: var(--dot); color: #fff;
+}
+#quickPriority button[aria-pressed="true"] .quick-dot, #quickCategory button[aria-pressed="true"] .quick-dot { background: #fff; }
+
 .save-task-btn {
   font: inherit; font-size: 14px; font-weight: 700; color: var(--bg);
   background: var(--sage); border: none; border-radius: 16px; padding: 13px; cursor: pointer;
   transition: filter .15s;
 }
 .save-task-btn:hover { filter: brightness(1.06); }
+
+.filter-actions { display: flex; gap: 10px; }
+.filter-actions .save-task-btn { flex: 1; }
+.filter-reset {
+  font: inherit; font-size: 14px; font-weight: 700; color: var(--ink-dim);
+  background: transparent; border: 1px solid var(--line-strong); border-radius: 16px; padding: 13px 18px; cursor: pointer;
+}
+.filter-reset:hover { border-color: var(--honey); color: var(--honey); }
 
 /* ---------- ask buddy (local model chat) ---------- */
 .chat { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }

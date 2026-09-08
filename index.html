@@ -70,6 +70,10 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3a4.2 4.2 0 0 0-4.2 4.2c0 3.6-1.3 4.9-1.3 4.9h11S14.2 10.8 14.2 7.2A4.2 4.2 0 0 0 10 3zM8.5 14.6a1.7 1.7 0 0 0 3 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span class="bell-dot" id="notifyPrompt"></span>
     </button>
+    <button type="button" class="bell" id="filterOpenBtn" aria-label="Filter tasks" title="Filter">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 5h14M6 10h8M8.5 15h3" stroke-linecap="round"/></svg>
+      <span class="bell-dot" id="filterActiveDot"></span>
+    </button>
     <button type="button" class="bell" id="settingsGearBtn" aria-label="Settings" title="Settings">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7">
         <path d="M3 5h8M15 5h2" stroke-linecap="round"/><circle cx="13" cy="5" r="1.6"/>
@@ -339,7 +343,44 @@
       </div>
     </div>
 
+    <div class="quick-when">
+      <p class="settings-label">Priority</p>
+      <!-- populated from js/taxonomy.js, so this list can't drift out of
+           sync with the detail screen's and filter sheet's own copies -->
+      <div class="quick-row" id="quickPriority"></div>
+      <p class="settings-label">Category</p>
+      <div class="quick-row" id="quickCategory"></div>
+    </div>
+
     <button type="button" class="save-task-btn" id="saveDraftBtn">Save task</button>
+  </div>
+</div>
+
+<!-- Narrows the Today tab's list beyond what the Today/Upcoming/All/Done
+     chips can express — those chips stay the primary, single-tap way to
+     switch views; this is for the two dimensions that need more than one
+     value at once (categories) or aren't a chip at all (priority). -->
+<div class="modal-overlay" id="filterOverlay" hidden>
+  <div class="modal sheet" id="filterSheet" role="dialog" aria-modal="true" aria-label="Filter tasks">
+    <div class="sheet-handle"></div>
+    <div class="modal-head">
+      <h3 class="sheet-title">Filter tasks</h3>
+      <button type="button" class="modal-close" id="filterClose" aria-label="Close">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div class="quick-when">
+      <p class="settings-label">Priority</p>
+      <div class="quick-row" id="filterPriorityRow"></div>
+      <p class="settings-label">Category — pick any number</p>
+      <div class="quick-row" id="filterCategoryRow"></div>
+    </div>
+
+    <div class="filter-actions">
+      <button type="button" class="filter-reset" id="filterReset">Reset</button>
+      <button type="button" class="save-task-btn" id="filterApply">Apply</button>
+    </div>
   </div>
 </div>
 
@@ -391,6 +432,18 @@
         <span class="detail-field-label">Reminder</span>
         <span class="detail-field-value" id="detailReminderValue">None</span>
       </button>
+    </div>
+
+    <div class="detail-tag-section">
+      <p class="settings-label">Priority</p>
+      <div class="quick-row" id="detailPriority"></div>
+      <p class="settings-label">Category</p>
+      <div class="quick-row" id="detailCategory"></div>
+    </div>
+
+    <div class="detail-notes-section">
+      <p class="settings-label">Notes</p>
+      <textarea class="detail-notes" id="detailNotes" placeholder="Add a note…" rows="3"></textarea>
     </div>
 
     <div class="detail-steps-section">

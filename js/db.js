@@ -70,6 +70,12 @@ export const db = {
         parentId: null,
         lastRecreatedAt: now,
         updatedAt: now,
+        // Optional classification — never required, nothing reasons about
+        // their absence. null/"" everywhere below reads as "unset", not
+        // "low priority" or "no category" as a real distinct choice.
+        priority: null, // null | "low" | "medium" | "high"
+        category: null, // null | "work" | "personal" | "health" | "other"
+        notes: "",
       },
       partial
     );

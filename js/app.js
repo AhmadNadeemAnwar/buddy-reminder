@@ -25,7 +25,7 @@ import { initSync, pushItem, pushDelete } from "./sync.js";
 import {
   WEEKDAY_LABELS,
   dateKey,
-  monthMatrix,
+  weekDates,
   itemsByDay,
   isToday,
   startOfDay,
@@ -80,8 +80,6 @@ const voiceStatus = document.getElementById("voiceStatus");
 const offlineBanner = document.getElementById("offlineBanner");
 const notifyPrompt = document.getElementById("notifyPrompt");
 const notifyEnable = document.getElementById("notifyEnable");
-const dayModalOverlay = document.getElementById("dayModalOverlay");
-const dayModal = document.getElementById("dayModal");
 const whenPicker = document.getElementById("whenPicker");
 const whenDate = document.getElementById("whenDate");
 const whenTime = document.getElementById("whenTime");
@@ -195,8 +193,11 @@ const onboardSkip = document.getElementById("onboardSkip");
 
 let allItems = [];
 let tab = "today";
-let calendarMonth = startOfDay(new Date());
-calendarMonth.setDate(1);
+// Which week the strip shows (any date within it — navigation just shifts
+// this by 7 days) and which day within that week the agenda below is
+// showing. Both default to today.
+let calendarWeekAnchor = startOfDay(new Date());
+let selectedDate = startOfDay(new Date());
 let openAddFor = null;
 let justAddedId = null;
 let activeFilter = "today"; // open on what's due today, not the whole list
@@ -207,7 +208,6 @@ let filterPriority = null;
 let filterCategories = new Set();
 let expandedSections = new Set();
 let editingItemId = null; // task whose reminder the picker is currently editing
-let selectedDate = null;
 let dayCreateOpen = false;
 let detailItemId = null; // task shown full-screen, or null
 
@@ -1326,9 +1326,7 @@ chatForm.addEventListener("submit", (e) => {
 
 // ---------------- calendar ----------------
 function renderCalendarView() {
-  const year = calendarMonth.getFullYear();
-  const month = calendarMonth.getMonth();
-  const weeks = monthMatrix(year, month);
+  const days = weekDates(calendarWeekAnchor);
   const byDay = itemsByDay(allItems);
 
   calendarWrap.innerHTML = "";
@@ -1338,104 +1336,82 @@ function renderCalendarView() {
   header.innerHTML = `
     <div class="cal-header-text">
       <p class="eyebrow">Reminders only</p>
-      <h2>${calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
+      <h2>${days[0].toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
     </div>
     <button type="button" class="cal-today" id="calToday">Today</button>
-    <button type="button" class="cal-nav" id="calPrev" aria-label="Previous month">
+    <button type="button" class="cal-nav" id="calPrev" aria-label="Previous week">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5l-5 5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <button type="button" class="cal-nav" id="calNext" aria-label="Next month">
+    <button type="button" class="cal-nav" id="calNext" aria-label="Next week">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 5l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   `;
   calendarWrap.appendChild(header);
 
-  const card = document.createElement("div");
-  card.className = "cal-card";
-
-  const weekdayRow = document.createElement("div");
-  weekdayRow.className = "cal-weekdays";
-  weekdayRow.innerHTML = WEEKDAY_LABELS.map((d) => `<span>${d}</span>`).join("");
-  card.appendChild(weekdayRow);
-
-  const grid = document.createElement("div");
-  grid.className = "cal-grid";
-  weeks.forEach((week) => {
-    week.forEach((cell) => {
-      const dayItems = byDay.get(dateKey(cell.date)) || [];
-      const shown = dayItems.slice(0, 3);
-      const overflow = dayItems.length - shown.length;
-      const cellEl = document.createElement("button");
-      cellEl.type = "button";
-      cellEl.className = "cal-cell" + (cell.inMonth ? "" : " outside") + (isToday(cell.date) ? " today" : "");
-      cellEl.innerHTML =
-        `<span class="cal-daynum">${cell.date.getDate()}</span>` +
-        `<span class="cal-dots">${shown.map(() => '<span class="cal-dot"></span>').join("")}${
-          overflow > 0 ? `<span class="cal-more">+${overflow}</span>` : ""
-        }</span>`;
-      cellEl.addEventListener("click", () => openDayModal(cell.date));
-      grid.appendChild(cellEl);
+  // One week at a time (not a month grid) — tapping a day selects it and
+  // updates the agenda below, replacing what used to be a separate popup.
+  const strip = document.createElement("div");
+  strip.className = "cal-week-strip";
+  days.forEach((date) => {
+    const dayItems = byDay.get(dateKey(date)) || [];
+    const cellEl = document.createElement("button");
+    cellEl.type = "button";
+    cellEl.className =
+      "cal-week-cell" + (isToday(date) ? " today" : "") + (dateKey(date) === dateKey(selectedDate) ? " selected" : "");
+    cellEl.innerHTML =
+      `<span class="cal-week-label">${WEEKDAY_LABELS[date.getDay()]}</span>` +
+      `<span class="cal-week-num">${date.getDate()}</span>` +
+      (dayItems.length ? '<span class="cal-week-dot"></span>' : "");
+    cellEl.addEventListener("click", () => {
+      selectedDate = date;
+      dayCreateOpen = false;
+      render();
     });
+    strip.appendChild(cellEl);
   });
-  card.appendChild(grid);
-  calendarWrap.appendChild(card);
+  calendarWrap.appendChild(strip);
 
-  const note = document.createElement("p");
-  note.className = "cal-note";
-  note.textContent = "Only tasks carrying a reminder appear here. Tap any day to see it, or to add one for that date.";
-  calendarWrap.appendChild(note);
+  calendarWrap.appendChild(renderAgenda());
 
   calendarWrap.querySelector("#calPrev").addEventListener("click", () => {
-    calendarMonth = new Date(year, month - 1, 1);
+    calendarWeekAnchor = addDays(calendarWeekAnchor, -7);
     render();
   });
   calendarWrap.querySelector("#calNext").addEventListener("click", () => {
-    calendarMonth = new Date(year, month + 1, 1);
+    calendarWeekAnchor = addDays(calendarWeekAnchor, 7);
     render();
   });
   calendarWrap.querySelector("#calToday").addEventListener("click", () => {
-    calendarMonth = startOfDay(new Date());
-    calendarMonth.setDate(1);
+    calendarWeekAnchor = startOfDay(new Date());
+    selectedDate = startOfDay(new Date());
     render();
   });
 }
 
-function openDayModal(date) {
-  selectedDate = date;
-  dayCreateOpen = false;
-  renderDayModal();
-  dayModalOverlay.hidden = false;
-  requestAnimationFrame(() => dayModalOverlay.classList.add("show"));
-}
+// The selected day's reminders, inline below the week strip — this used to
+// be a separate tap-to-open popup (day-modal); folding it into the tab
+// itself matches the reference, and there's nowhere else that ever opened
+// that popup, so it's gone rather than kept alongside this.
+function renderAgenda() {
+  const wrap = document.createElement("div");
+  wrap.className = "cal-agenda";
 
-function closeDayModal() {
-  dayModalOverlay.classList.remove("show");
-  setTimeout(() => {
-    dayModalOverlay.hidden = true;
-  }, 180);
-}
-
-function renderDayModal() {
   const today = new Date();
   const key = dateKey(selectedDate);
   const items = allItems.filter((it) => it.dueAt && !it.parentId && dateKey(it.dueAt) === key);
   const childrenMap = buildChildrenMap(allItems);
 
-  dayModal.innerHTML = "";
-
-  const head = document.createElement("div");
-  head.className = "modal-head";
-  head.innerHTML = `
-    <h2>${selectedDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h2>
-    <button type="button" class="modal-close" aria-label="Close">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/></svg>
-    </button>
-  `;
-  head.querySelector(".modal-close").addEventListener("click", closeDayModal);
-  dayModal.appendChild(head);
+  const head = document.createElement("p");
+  head.className = "cal-agenda-head";
+  head.textContent = `${dayLabel(selectedDate, today)} · ${selectedDate.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })}`;
+  wrap.appendChild(head);
 
   const list = document.createElement("div");
-  list.className = "modal-day-list";
+  list.className = "cal-agenda-list";
   if (!items.length) {
     const p = document.createElement("p");
     p.className = "empty-hint";
@@ -1452,15 +1428,16 @@ function renderDayModal() {
       check.innerHTML = iconCheck;
       check.addEventListener("click", async () => {
         await completeItem(item, check);
-        renderDayModal();
+        render();
       });
       const body = document.createElement("div");
       body.className = "row-body";
       const sub = subLine(item, childrenMap);
       const dp = duePill(item, today);
+      const cp = categoryPill(item);
       body.innerHTML =
         `<div class="row-title">${escapeHtml(item.title)}</div>` +
-        (sub || dp ? `<div class="row-meta">${dp}${sub ? `<span class="row-sub">${sub}</span>` : ""}</div>` : "");
+        (sub || dp || cp ? `<div class="row-meta">${dp}${cp}${sub ? `<span class="row-sub">${sub}</span>` : ""}</div>` : "");
       const del = document.createElement("button");
       del.className = "row-delete";
       del.type = "button";
@@ -1468,7 +1445,7 @@ function renderDayModal() {
       del.innerHTML = iconTrash;
       del.addEventListener("click", async () => {
         await removeItem(item.id);
-        renderDayModal();
+        render();
       });
       row.appendChild(check);
       row.appendChild(body);
@@ -1476,7 +1453,7 @@ function renderDayModal() {
       list.appendChild(row);
     });
   }
-  dayModal.appendChild(list);
+  wrap.appendChild(list);
 
   if (!dayCreateOpen) {
     const addBtn = document.createElement("button");
@@ -1485,12 +1462,14 @@ function renderDayModal() {
     addBtn.innerHTML = iconPlus + "<span>Add for this day</span>";
     addBtn.addEventListener("click", () => {
       dayCreateOpen = true;
-      renderDayModal();
+      render();
     });
-    dayModal.appendChild(addBtn);
+    wrap.appendChild(addBtn);
   } else {
-    dayModal.appendChild(renderDayCreateForm());
+    wrap.appendChild(renderDayCreateForm());
   }
+
+  return wrap;
 }
 
 function renderDayCreateForm() {
@@ -1516,7 +1495,7 @@ function renderDayCreateForm() {
 
   f.querySelector(".day-cancel").addEventListener("click", () => {
     dayCreateOpen = false;
-    renderDayModal();
+    render();
   });
 
   f.addEventListener("submit", async (e) => {
@@ -1547,7 +1526,7 @@ function renderDayCreateForm() {
     justAddedId = created.id;
     dayCreateOpen = false;
     await loadAll();
-    renderDayModal();
+    render();
   });
 
   return f;
@@ -1911,13 +1890,10 @@ function setTab(next) {
 
 Object.entries(tabButtons).forEach(([k, b]) => b.addEventListener("click", () => setTab(k)));
 
-dayModalOverlay.addEventListener("click", (e) => {
-  if (e.target === dayModalOverlay) closeDayModal();
-});
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!whenPicker.hidden) toggleWhenPicker(false);
-  else if (!dayModalOverlay.hidden) closeDayModal();
+  else if (!filterOverlay.hidden) closeFilterSheet();
   else if (!composerOverlay.hidden) closeComposer();
   else if (!detailScreen.hidden) closeDetail();
 });

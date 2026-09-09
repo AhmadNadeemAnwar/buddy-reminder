@@ -74,13 +74,6 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 5h14M6 10h8M8.5 15h3" stroke-linecap="round"/></svg>
       <span class="bell-dot" id="filterActiveDot"></span>
     </button>
-    <button type="button" class="bell" id="settingsGearBtn" aria-label="Settings" title="Settings">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7">
-        <path d="M3 5h8M15 5h2" stroke-linecap="round"/><circle cx="13" cy="5" r="1.6"/>
-        <path d="M3 10h2M9 10h8" stroke-linecap="round"/><circle cx="7" cy="10" r="1.6"/>
-        <path d="M3 15h8M15 15h2" stroke-linecap="round"/><circle cx="13" cy="15" r="1.6"/>
-      </svg>
-    </button>
   </header>
 
   <div class="strip strip-offline" id="offlineBanner">
@@ -273,16 +266,11 @@
 
   </main>
 
-  <!-- Pinned above the tab bar: open the composer sheet, or talk to it -->
-  <div class="quickbar">
-    <button type="button" class="add-pill" id="addTaskPill">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 4.5v11M4.5 10h11" stroke-linecap="round"/></svg>
-      <span>Add a task…</span>
-    </button>
-    <button type="button" class="mic-fab" id="micBtn" aria-label="Add by voice" title="Add by voice">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="6" height="10" rx="3"/><path d="M4 9.5a6 6 0 0 0 12 0M10 15.5v2.3M7 17.8h6" stroke-linecap="round"/></svg>
-    </button>
-  </div>
+  <!-- Floats above the tab bar on every tab; opens the composer sheet,
+       which is where voice capture lives now too (mic icon in its input). -->
+  <button type="button" class="fab-add" id="fabAdd" aria-label="Add a task">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M10 4.5v11M4.5 10h11" stroke-linecap="round"/></svg>
+  </button>
 
   <nav class="tab-bar" id="tabBar" role="tablist" aria-label="Sections">
     <button type="button" class="tab-btn" id="tabToday" data-tab="today" aria-pressed="true">
@@ -318,6 +306,9 @@
 
     <form id="captureForm">
       <input id="captureInput" type="text" placeholder="Try “call Mom tomorrow at 8pm”…" autocomplete="off" />
+      <button type="button" class="capture-mic" id="captureMicBtn" aria-label="Add by voice" title="Add by voice">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="6" height="10" rx="3"/><path d="M4 9.5a6 6 0 0 0 12 0M10 15.5v2.3M7 17.8h6" stroke-linecap="round"/></svg>
+      </button>
     </form>
     <p class="parse-readout"><span>Buddy heard:</span><span class="parse-chip" id="parseChip">No reminder — just a to-do</span></p>
 

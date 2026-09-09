@@ -74,12 +74,12 @@ const insightBody = document.getElementById("insightBody");
 const statsRow = document.getElementById("statsRow");
 const form = document.getElementById("captureForm");
 const input = document.getElementById("captureInput");
-const micBtn = document.getElementById("micBtn");
+const fabAdd = document.getElementById("fabAdd");
+const captureMicBtn = document.getElementById("captureMicBtn");
 const voiceStatus = document.getElementById("voiceStatus");
 const offlineBanner = document.getElementById("offlineBanner");
 const notifyPrompt = document.getElementById("notifyPrompt");
 const notifyEnable = document.getElementById("notifyEnable");
-const settingsGearBtn = document.getElementById("settingsGearBtn");
 const dayModalOverlay = document.getElementById("dayModalOverlay");
 const dayModal = document.getElementById("dayModal");
 const whenPicker = document.getElementById("whenPicker");
@@ -107,7 +107,6 @@ const tabBuddy = document.getElementById("tabBuddy");
 const tabSettings = document.getElementById("tabSettings");
 
 // composer sheet
-const addTaskPill = document.getElementById("addTaskPill");
 const composerOverlay = document.getElementById("composerOverlay");
 const composerClose = document.getElementById("composerClose");
 const parseChip = document.getElementById("parseChip");
@@ -1735,7 +1734,7 @@ function quickDayDate(key) {
   return null;
 }
 
-addTaskPill.addEventListener("click", () => openComposer());
+fabAdd.addEventListener("click", () => openComposer());
 composerClose.addEventListener("click", () => closeComposer());
 composerOverlay.addEventListener("click", (e) => {
   if (e.target === composerOverlay) closeComposer();
@@ -1911,7 +1910,6 @@ function setTab(next) {
 }
 
 Object.entries(tabButtons).forEach(([k, b]) => b.addEventListener("click", () => setTab(k)));
-settingsGearBtn.addEventListener("click", () => setTab("settings"));
 
 dayModalOverlay.addEventListener("click", (e) => {
   if (e.target === dayModalOverlay) closeDayModal();
@@ -2157,8 +2155,12 @@ voiceAutoSwitch.querySelectorAll("button").forEach((btn) => {
 });
 
 // ---------------- voice ----------------
+// The mic now lives inside the composer sheet's input (was a standalone
+// FAB) — starting it while the sheet is already open works unchanged
+// because .voice-overlay's z-index (60) already sits above .modal-overlay
+// (50), so it simply covers the sheet rather than needing to close it.
 if (!voiceSupported) {
-  micBtn.style.display = "none";
+  captureMicBtn.style.display = "none";
 } else {
   let recording = false;
   // Voice is a single "say it, it's done" gesture — no Enter, no tapping +.
@@ -2214,7 +2216,7 @@ if (!voiceSupported) {
     }, 200);
   }
 
-  micBtn.addEventListener("click", () => {
+  captureMicBtn.addEventListener("click", () => {
     if (recording) voice.stop();
     else voice.start();
   });
